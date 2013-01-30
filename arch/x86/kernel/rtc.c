@@ -14,6 +14,7 @@
 #include <asm/time.h>
 #include <asm/intel-mid.h>
 #include <asm/rtc.h>
+#include <asm/io_apic.h>
 
 #ifdef CONFIG_X86_32
 /*
@@ -146,6 +147,32 @@ void read_persistent_clock(struct timespec *ts)
 	x86_platform.get_wallclock(ts);
 }
 
+static int handle_mrfl_dev_ioapic(int irq)
+{
+	int polarity = 0; /*Active high */
+	int ioapic = 0;
+	struct irq_alloc_info info;
+
+	ioapic = mp_find_ioapic(irq);
+	if (ioapic >= 0) {
+		pr_debug("%s: irq=%d, ioapic=%d\n", __func__, irq, ioapic);
+	} else {
+		pr_debug("%s: can't find interrupt %d in ioapic\n", __func__, irq);
+	}
+
+	ioapic_set_alloc_attr(&info, NUMA_NO_NODE, 1, polarity);
+	/* Tracing through the ioapic calls we have to take into account
+	 * how the ret value is being interpreted for Merrifield's controllers
+	 * (like sdhci-pci for the eMMC) which for this platform uses
+	 * IRQ == 0 and is not mapped, so no use of <= here please.
+	 */
+	if (mp_map_gsi_to_irq(irq, IOAPIC_MAP_ALLOC, &info) < 0) {
+		pr_warn("%s: Cannot find/map interrupt %d in ioapic\n", 
+			__func__, irq);
+			return -EINVAL;
+	}
+	return 0;
+}
 
 static struct resource rtc_resources[] = {
 	[0] = {
@@ -169,6 +196,8 @@ static struct platform_device rtc_device = {
 
 static __init int add_rtc_cmos(void)
 {
+	int ret;
+
 #ifdef CONFIG_PNP
 	static const char * const ids[] __initconst =
 	    { "PNP0b00", "PNP0b01", "PNP0b02", };
@@ -189,16 +218,16 @@ static __init int add_rtc_cmos(void)
 		return 0;
 
 	/* Intel MID platforms don't have ioport rtc */
-	if (intel_mid_identify_cpu())
+	if (intel_mid_identify_cpu() &&
+		intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER)
 		return -ENODEV;
-
-#ifdef CONFIG_ACPI
-	if (acpi_gbl_FADT.boot_flags & ACPI_FADT_NO_CMOS_RTC) {
-		/* This warning can likely go away again in a year or two. */
-		pr_info("ACPI: not registering RTC platform device\n");
-		return -ENODEV;
+	else {
+		ret = handle_mrfl_dev_ioapic(RTC_IRQ);
+		if (ret < 0) {
+			pr_warn("Error adding Merrifield device ioapic for RTC\n");
+			return ret;
+		}
 	}
-#endif
 
 	if (paravirt_enabled() && !paravirt_has(RTC))
 		return -ENODEV;
