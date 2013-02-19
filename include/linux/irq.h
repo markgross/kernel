@@ -97,6 +97,7 @@ enum {
 	IRQ_NOTHREAD		= (1 << 16),
 	IRQ_PER_CPU_DEVID	= (1 << 17),
 	IRQ_IS_POLLED		= (1 << 18),
+	IRQ_CHAINED		= (1 << 18),
 };
 
 #define IRQF_MODIFY_MASK	\
