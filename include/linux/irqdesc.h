@@ -170,6 +170,13 @@ static inline int irq_has_action(unsigned int irq)
 	return irq_desc_has_action(irq_to_desc(irq));
 }
 
+/* Test to see if the IRQ is chained */
+static inline int irq_is_chained(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	return desc->status_use_accessors & IRQ_CHAINED;
+}
+
 /**
  * irq_set_handler_locked - Set irq handler from a locked region
  * @data:	Pointer to the irq_data structure which identifies the irq

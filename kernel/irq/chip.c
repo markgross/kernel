@@ -780,6 +780,7 @@ __irq_do_set_handler(struct irq_desc *desc, irq_flow_handler_t handle,
 		irq_settings_set_noprobe(desc);
 		irq_settings_set_norequest(desc);
 		irq_settings_set_nothread(desc);
+		irq_settings_set_chained(desc);
 		desc->action = &chained_action;
 		irq_startup(desc, true);
 	}
