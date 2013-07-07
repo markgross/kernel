@@ -120,6 +120,25 @@ struct devs_id {
 				struct devs_id *dev);
 };
 
+#define SD_NAME_SIZE 16
+/**
+ * struct sd_board_info - template for device creation
+ * @name: Initializes sdio_device.name; identifies the driver.
+ * @bus_num: board-specific identifier for a given SDIO controller.
+ * @board_ref_clock: Initializes sd_device.board_ref_clock;
+ * @platform_data: Initializes sd_device.platform_data; the particular
+ *      data stored there is driver-specific.
+ *
+ */
+struct sd_board_info {
+       char            name[SD_NAME_SIZE];
+       int             bus_num;
+       unsigned short  addr;
+       u32             board_ref_clock;
+       void            *platform_data;
+};
+
+
 #define sfi_device(i)   \
 	static const struct devs_id *const __intel_mid_sfi_##i##_dev __used \
 	__attribute__((__section__(".x86_intel_mid_dev.init"))) = &i
