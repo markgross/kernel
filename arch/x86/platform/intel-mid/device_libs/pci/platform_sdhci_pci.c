@@ -94,6 +94,50 @@ static struct sdhci_pci_data clv_sdhci_pci_data[] = {
 	},
 };
 
+/* MRFL platform data */
+static struct sdhci_pci_data mrfl_sdhci_pci_data[] = {
+	[EMMC0_INDEX] = {
+			.pdev = NULL,
+			.slotno = 0,
+			.rst_n_gpio = -EINVAL,
+			.cd_gpio = -EINVAL,
+			.quirks = 0,
+			.platform_quirks = 0,
+			.setup = 0,
+			.cleanup = 0,
+	},
+	[EMMC1_INDEX] = {
+			.pdev = NULL,
+			.slotno = 0,
+			.rst_n_gpio = 97,
+			.cd_gpio = -EINVAL,
+			.quirks = 0,
+			.platform_quirks = 0,
+			.setup = 0,
+			.cleanup = 0,
+	},
+	[SD_INDEX] = {
+			.pdev = NULL,
+			.slotno = 0,
+			.rst_n_gpio = -EINVAL,
+			.cd_gpio = 77,
+			.quirks = 0,
+			.platform_quirks = 0,
+			.setup = 0,
+			.cleanup = 0,
+	},
+	[SDIO_INDEX] = {
+			.pdev = NULL,
+			.slotno = 0,
+			.rst_n_gpio = -EINVAL,
+			.cd_gpio = -EINVAL,
+			.quirks = 0,
+			.platform_quirks = 0,
+			.setup = 0,
+			.cleanup = 0,
+	},
+};
+
 static struct sdhci_pci_data *get_sdhci_platform_data(struct pci_dev *pdev)
 {
 	struct sdhci_pci_data *pdata = NULL;
@@ -124,6 +168,29 @@ static struct sdhci_pci_data *get_sdhci_platform_data(struct pci_dev *pdev)
 		break;
 	case PCI_DEVICE_ID_INTEL_CLV_SDIO1:
 		pdata = &clv_sdhci_pci_data[SDIO_INDEX];
+		break;
+	case PCI_DEVICE_ID_INTEL_MRFL_MMC:
+		switch (PCI_FUNC(pdev->devfn)) {
+		case 0:
+			pdata = &mrfl_sdhci_pci_data[EMMC0_INDEX];
+			break;
+		case 1:
+			pdata = &mrfl_sdhci_pci_data[EMMC1_INDEX];
+			break;
+		case 2:
+			pdata = &mrfl_sdhci_pci_data[SD_INDEX];
+			break;
+		case 3:
+			pdata = &mrfl_sdhci_pci_data[SDIO_INDEX];
+			pdata->quirks = sdhci_pdata_quirks;
+			pdata->register_embedded_control =
+					sdhci_embedded_control;
+			break;
+		default:
+			pr_err("%s func %s: Invalid PCI Dev func no. (%d)\n",
+				__FILE__, __func__, PCI_FUNC(pdev->devfn));
+			break;
+		}
 		break;
 	default:
 		break;
