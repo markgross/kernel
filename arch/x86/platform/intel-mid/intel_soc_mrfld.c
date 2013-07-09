@@ -37,7 +37,6 @@ static int mrfld_pmu_init(void)
 				SSMSK(D0I3_MASK, PMU_RESERVED_LSS_14)	|
 				SSMSK(D0I3_MASK, PMU_RESERVED_LSS_15));
 
-
 	/* Put LSS8 as unused on Tangier */
 	mid_pmu_cxt->os_sss[0] |= \
 				SSMSK(D0I3_MASK, PMU_USB_MPH_LSS_08);
@@ -147,7 +146,6 @@ void platform_update_all_lss_states(struct pmu_ss_states *pmu_config,
 				SSMSK(D0I3_MASK, PMU_RESERVED_LSS_13)	|
 				SSMSK(D0I3_MASK, PMU_RESERVED_LSS_14)	|
 				SSMSK(D0I3_MASK, PMU_RESERVED_LSS_15));
-
 
 	/* Put LSS8 as unused on Tangier */
 	pmu_config->pmu2_states[0] |= \
