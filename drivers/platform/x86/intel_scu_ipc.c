@@ -652,7 +652,8 @@ static struct pci_driver ipc_driver = {
 	.remove = ipc_remove,
 };
 
-static int __init intel_scu_ipc_init(void)
+
+static int intel_scu_ipc_init(void)
 {
 	int platform;		/* Platform type */
 
