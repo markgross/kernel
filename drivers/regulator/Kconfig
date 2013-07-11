@@ -751,4 +751,3 @@ config REGULATOR_WM8994
 	  WM8994 CODEC.
 
 endif
-
