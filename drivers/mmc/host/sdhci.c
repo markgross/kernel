@@ -2527,6 +2527,17 @@ static const struct mmc_host_ops sdhci_ops = {
  *                                                                           *
 \*****************************************************************************/
 
+static void sdhci_tasklet_card(unsigned long param)
+{
+	struct sdhci_host *host = (struct sdhci_host*)param;
+
+	cancel_delayed_work(&host->mmc->detect);
+
+	sdhci_card_event(host->mmc);
+
+	mmc_detect_change(host->mmc, msecs_to_jiffies(500));
+}
+
 static void sdhci_tasklet_finish(unsigned long param)
 {
 	struct sdhci_host *host;
@@ -2555,7 +2566,8 @@ static void sdhci_tasklet_finish(unsigned long param)
 	 * upon error conditions.
 	 */
 	if (!(host->flags & SDHCI_DEVICE_DEAD) &&
-	    ((mrq->cmd && mrq->cmd->error) ||
+	    ((mrq->cmd && mrq->cmd->error &&
+	     mrq->cmd->error != -ENOMEDIUM) ||
 	     (mrq->sbc && mrq->sbc->error) ||
 	     (mrq->data && ((mrq->data->error && !mrq->data->stop) ||
 			    (mrq->data->stop && mrq->data->stop->error))) ||
@@ -2911,6 +2923,7 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 
 			host->thread_isr |= intmask & (SDHCI_INT_CARD_INSERT |
 						       SDHCI_INT_CARD_REMOVE);
+			tasklet_schedule(&host->card_tasklet);
 			result = IRQ_WAKE_THREAD;
 		}
 
@@ -4471,6 +4484,8 @@ int sdhci_add_host(struct sdhci_host *host)
 	/*
 	 * Init tasklets.
 	 */
+	tasklet_init(&host->card_tasklet,
+		sdhci_tasklet_card, (unsigned long)host);
 	tasklet_init(&host->finish_tasklet,
 		sdhci_tasklet_finish, (unsigned long)host);
 
@@ -4541,6 +4556,7 @@ reset:
 	sdhci_release_ownership(mmc);
 #endif
 untasklet:
+	tasklet_kill(&host->card_tasklet);
 	tasklet_kill(&host->finish_tasklet);
 
 	return ret;
@@ -4586,6 +4602,7 @@ void sdhci_remove_host(struct sdhci_host *host, int dead)
 
 	del_timer_sync(&host->timer);
 
+	tasklet_kill(&host->card_tasklet);
 	tasklet_kill(&host->finish_tasklet);
 
 	if (!IS_ERR(mmc->supply.vqmmc))
