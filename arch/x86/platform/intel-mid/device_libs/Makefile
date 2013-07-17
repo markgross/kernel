@@ -23,3 +23,6 @@ obj-$(subst m,y,$(CONFIG_KEYBOARD_GPIO)) += platform_gpio_keys.o
 obj-$(subst m,y,$(CONFIG_INTEL_MID_WATCHDOG)) += platform_wdt.o
 # SD Devices
 obj-$(subst m,y,$(CONFIG_WILINK_PLATFORM_DATA)) += platform_wl12xx.o
+ifndef CONFIG_ACPI
+obj-$(subst m,y,$(CONFIG_BCM_BT_LPM)) += platform_btlpm.o
+endif
