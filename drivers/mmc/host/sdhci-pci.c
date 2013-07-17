@@ -33,6 +33,91 @@
 #include "sdhci-pci.h"
 #include "sdhci-pci-o2micro.h"
 
+/* Settle down values copied from broadcom reference design. */
+#define DELAY_CARD_INSERTED	200
+#define DELAY_CARD_REMOVED	50
+
+/*
+ * PCI device IDs
+ */
+#define PCI_DEVICE_ID_INTEL_PCH_SDIO0	0x8809
+#define PCI_DEVICE_ID_INTEL_PCH_SDIO1	0x880a
+#define PCI_DEVICE_ID_INTEL_BYT_EMMC	0x0f14
+#define PCI_DEVICE_ID_INTEL_BYT_SDIO	0x0f15
+#define PCI_DEVICE_ID_INTEL_BYT_SD	0x0f16
+
+/*
+ * PCI registers
+ */
+
+#define PCI_SDHCI_IFPIO			0x00
+#define PCI_SDHCI_IFDMA			0x01
+#define PCI_SDHCI_IFVENDOR		0x02
+
+#define PCI_SLOT_INFO			0x40	/* 8 bits */
+#define  PCI_SLOT_INFO_SLOTS(x)		((x >> 4) & 7)
+#define  PCI_SLOT_INFO_FIRST_BAR_MASK	0x07
+
+#define MAX_SLOTS			8
+#define IPC_EMMC_MUTEX_CMD             0xEE
+
+/* CLV SD card power resource */
+
+#define VCCSDIO_ADDR		0xd5
+#define VCCSDIO_OFF		0x4
+#define VCCSDIO_NORMAL		0x7
+#define ENCTRL0_ISOLATE		0x55555557
+#define ENCTRL1_ISOLATE		0x5555
+#define STORAGESTIO_FLISNUM	0x8
+#define ENCTRL0_OFF		0x10
+#define ENCTRL1_OFF		0x11
+
+struct sdhci_pci_chip;
+struct sdhci_pci_slot;
+
+struct sdhci_pci_fixes {
+	unsigned int		quirks;
+	unsigned int		quirks2;
+	bool			allow_runtime_pm;
+
+	int			(*probe) (struct sdhci_pci_chip *);
+
+	int			(*probe_slot) (struct sdhci_pci_slot *);
+	void			(*remove_slot) (struct sdhci_pci_slot *, int);
+
+	int			(*suspend) (struct sdhci_pci_chip *);
+	int			(*resume) (struct sdhci_pci_chip *);
+};
+
+struct sdhci_pci_slot {
+	struct sdhci_pci_chip	*chip;
+	struct sdhci_host	*host;
+	struct sdhci_pci_data	*data;
+
+	int			pci_bar;
+	int			rst_n_gpio;
+	int			cd_gpio;
+	int			cd_irq;
+	bool			dev_power;
+	struct mutex		power_lock;
+};
+
+struct sdhci_pci_chip {
+	struct pci_dev		*pdev;
+
+	unsigned int		quirks;
+	unsigned int		quirks2;
+	bool			allow_runtime_pm;
+	const struct sdhci_pci_fixes *fixes;
+
+	int			num_slots;	/* Slots on controller */
+	struct sdhci_pci_slot	*slots[MAX_SLOTS]; /* Pointers to host slots */
+
+	unsigned int		enctrl0_orig;
+	unsigned int		enctrl1_orig;
+};
+
+
 /*****************************************************************************\
  *                                                                           *
  * Hardware specific quirk handling                                          *
@@ -212,7 +297,7 @@ static void mfd_emmc_mutex_register(struct sdhci_pci_slot *slot)
 #ifdef CONFIG_INTEL_SCU_IPC
 	int err;
 
-	err = rpmsg_send_generic_command(IPC_EMMC_MUTEX_CMD, 0,
+	err = intel_scu_ipc_command(IPC_EMMC_MUTEX_CMD, 0,
 			NULL, 0, &mutex_var_addr, 1);
 	if (err) {
 		dev_err(&slot->chip->pdev->dev, "IPC error: %d\n", err);
@@ -247,10 +332,29 @@ static void mfd_emmc_mutex_register(struct sdhci_pci_slot *slot)
 
 static int mfd_emmc_probe_slot(struct sdhci_pci_slot *slot)
 {
+	switch (slot->chip->pdev->device) {
+	case PCI_DEVICE_ID_INTEL_MFD_EMMC0:
+		mfd_emmc_mutex_register(slot);
+		break;
+	case PCI_DEVICE_ID_INTEL_MFD_EMMC1:
+		break;
+	}
 	slot->host->mmc->caps |= MMC_CAP_8_BIT_DATA | MMC_CAP_NONREMOVABLE;
 	slot->host->mmc->caps2 |= MMC_CAP2_BOOTPART_NOACC |
 				  MMC_CAP2_HC_ERASE_SZ;
 	return 0;
+}
+
+static void mfd_emmc_remove_slot(struct sdhci_pci_slot *slot, int dead)
+{
+	switch (slot->chip->pdev->device) {
+	case PCI_DEVICE_ID_INTEL_MFD_EMMC0:
+		if (slot->host->sram_addr)
+			iounmap(slot->host->sram_addr);
+		break;
+	case PCI_DEVICE_ID_INTEL_MFD_EMMC1:
+		break;
+	}
 }
 
 static int mfd_sdio_probe_slot(struct sdhci_pci_slot *slot)
@@ -286,6 +390,7 @@ static const struct sdhci_pci_fixes sdhci_intel_mfd_emmc = {
 	.quirks		= SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC,
 	.allow_runtime_pm = true,
 	.probe_slot	= mfd_emmc_probe_slot,
+	.remove_slot	= mfd_emmc_remove_slot,
 };
 
 static const struct sdhci_pci_fixes sdhci_intel_pch_sdio = {
