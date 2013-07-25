@@ -33,6 +33,7 @@
 #include <asm/io.h>
 #include <asm/i8259.h>
 #include <asm/intel_scu_ipc.h>
+#include <asm/intel_mid_rpmsg.h>
 #include <asm/apb_timer.h>
 #include <asm/reboot.h>
 
@@ -74,7 +75,13 @@ static void intel_mid_power_off(void)
 
 static void intel_mid_reboot(void)
 {
-	intel_scu_ipc_simple_command(IPCMSG_COLD_BOOT, 0);
+	/* Call below replaced with rpmsg_* calls ported from 3.10 */
+	//intel_scu_ipc_simple_command(IPCMSG_COLD_BOOT, 0);
+
+	if (force_cold_boot)
+		rpmsg_send_generic_simple_command(IPCMSG_COLD_BOOT, 0);
+	else
+		rpmsg_send_generic_simple_command(IPCMSG_COLD_RESET, 0);
 }
 
 static unsigned long __init intel_mid_calibrate_tsc(void)
