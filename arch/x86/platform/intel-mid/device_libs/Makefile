@@ -1,4 +1,5 @@
 # IPC Devices
+obj-y += platform_mrfl_regulator.o
 obj-y += platform_ipc.o
 obj-$(subst m,y,$(CONFIG_MFD_INTEL_MSIC)) += platform_msic.o
 obj-$(subst m,y,$(CONFIG_SND_MFLD_MACHINE)) += platform_msic_audio.o
