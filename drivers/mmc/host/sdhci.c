@@ -1431,11 +1431,11 @@ static void sdhci_set_power(struct sdhci_host *host, unsigned char mode,
  * save some unused expenses.
  * @mmc: mmc host
  *
-* @return return value:
-* 0 - Acquried the ownership successfully. The last owner is IA
-* 1 - Acquried the ownership succesffully. The last owenr is SCU
-* -EBUSY - failed to acquire ownership within the timeout period
-	*/
+ * @return return value:
+ * 0 - Acquried the ownership successfully. The last owner is IA
+ * 1 - Acquried the ownership successfully. The last owenr is SCU
+ * -EBUSY - failed to acquire ownership within the timeout period
+ */
 static int sdhci_do_acquire_ownership(struct mmc_host *mmc)
 {
 	struct sdhci_host *host;
@@ -4160,6 +4160,35 @@ int sdhci_add_host(struct sdhci_host *host)
 			     SDHCI_RETUNING_MODE_SHIFT;
 
 	ocr_avail = 0;
+
+	host->vmmc = regulator_get(mmc_dev(mmc), "vmmc");
+	if (IS_ERR_OR_NULL(host->vmmc)) {
+		if (PTR_ERR(host->vmmc) < 0) {
+			pr_info("%s: no vmmc regulator found\n",
+				mmc_hostname(mmc));
+			host->vmmc = NULL;
+		}
+	}
+
+#ifdef CONFIG_REGULATOR
+	sdhci_try_get_regulator(host);
+	/*
+	 * Voltage range check makes sense only if regulator reports
+	 * any voltage value.
+	 */
+	if (host->vmmc && regulator_get_voltage(host->vmmc) > 0) {
+		ret = regulator_is_supported_voltage(host->vmmc, 2700000,
+			3600000);
+		if ((ret <= 0) || (!(caps[0] & SDHCI_CAN_VDD_330)))
+			caps[0] &= ~SDHCI_CAN_VDD_330;
+		if ((ret <= 0) || (!(caps[0] & SDHCI_CAN_VDD_300)))
+			caps[0] &= ~SDHCI_CAN_VDD_300;
+		ret = regulator_is_supported_voltage(host->vmmc, 1700000,
+			1950000);
+		if ((ret <= 0) || (!(caps[0] & SDHCI_CAN_VDD_180)))
+			caps[0] &= ~SDHCI_CAN_VDD_180;
+	}
+#endif /* CONFIG_REGULATOR */
 
 	/*
 	 * According to SD Host Controller spec v3.00, if the Host System
