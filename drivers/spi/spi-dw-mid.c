@@ -271,16 +271,33 @@ static int mid_spi_dma_transfer(struct dw_spi *dws, struct spi_transfer *xfer)
 	return 0;
 }
 
-static void mid_spi_dma_stop(struct dw_spi *dws)
+static int mid_spi_dma_suspend(struct dw_spi *dws)
 {
-	if (test_bit(TX_BUSY, &dws->dma_chan_busy)) {
-		dmaengine_terminate_all(dws->txchan);
-		clear_bit(TX_BUSY, &dws->dma_chan_busy);
-	}
-	if (test_bit(RX_BUSY, &dws->dma_chan_busy)) {
-		dmaengine_terminate_all(dws->rxchan);
-		clear_bit(RX_BUSY, &dws->dma_chan_busy);
-	}
+	struct dma_chan *txchan, *rxchan;
+
+	txchan = dws->txchan;
+	rxchan = dws->rxchan;
+
+	txchan->device->device_control(txchan, DMA_TERMINATE_ALL, 0);
+	rxchan->device->device_control(rxchan, DMA_TERMINATE_ALL, 0);
+
+	txchan->device->device_control(txchan, DMA_PAUSE, 0);
+	rxchan->device->device_control(rxchan, DMA_PAUSE, 0);
+
+	return 0;
+}
+
+static int mid_spi_dma_resume(struct dw_spi *dws)
+{
+	struct dma_chan *txchan, *rxchan;
+
+	txchan = dws->txchan;
+	rxchan = dws->rxchan;
+
+	txchan->device->device_control(txchan, DMA_RESUME, 0);
+	rxchan->device->device_control(rxchan, DMA_RESUME, 0);
+
+	return 0;
 }
 
 static struct dw_spi_dma_ops mid_dma_ops = {
@@ -289,7 +306,8 @@ static struct dw_spi_dma_ops mid_dma_ops = {
 	.dma_setup	= mid_spi_dma_setup,
 	.can_dma	= mid_spi_can_dma,
 	.dma_transfer	= mid_spi_dma_transfer,
-	.dma_stop	= mid_spi_dma_stop,
+	.dma_suspend	= mid_spi_dma_suspend,
+	.dma_resume	= mid_spi_dma_resume,
 };
 #endif
 
