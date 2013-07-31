@@ -2914,9 +2914,25 @@ static irqreturn_t sdhci_irq(int irq, void *dev_id)
 			result = IRQ_WAKE_THREAD;
 		}
 
-		if (intmask & SDHCI_INT_CMD_MASK)
+		if (intmask & SDHCI_INT_CMD_MASK) {
+			/*
+			 * If encounter command conflict interrupts,
+			 * before clearing it, delay 64 clocks, otherwise the interrupts
+			 * will be generated again.
+			 * This is just experience. SDHC spec doesn't
+			 * say the command conflict interrupts will be generated
+			 * again without a delay before clearing them.
+			 */
+			if ((intmask & SDHCI_INT_CMD_CONFLICT) ==
+					SDHCI_INT_CMD_CONFLICT) {
+				if (host->clock)
+					udelay(64 * 1000000 / host->clock);
+				else
+					udelay(500);
+			}
 			sdhci_cmd_irq(host, intmask & SDHCI_INT_CMD_MASK,
 				      &intmask);
+		}
 
 		if (intmask & SDHCI_INT_DATA_MASK)
 			sdhci_data_irq(host, intmask & SDHCI_INT_DATA_MASK);
