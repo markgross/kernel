@@ -20,6 +20,7 @@
 #include <asm/intel_scu_ipc.h>
 #include <linux/intel_mid_pm.h>
 #include <linux/hardirq.h>
+#include <linux/mmc/sdhci.h>
 
 #include "platform_sdhci_pci.h"
 
@@ -55,6 +56,16 @@ static int panic_mode_emmc0_power_up(void *data)
 	return 0;
 }
 #endif
+
+static unsigned int sdhci_pdata_quirks;
+
+int sdhci_pdata_set_quirks(unsigned int quirks)
+{
+	/*Should not be set more than once*/
+	WARN_ON(sdhci_pdata_quirks);
+	sdhci_pdata_quirks = quirks;
+	return 0;
+}
 
 /* MFLD platform data */
 static struct sdhci_pci_data mfld_sdhci_pci_data[] = {
@@ -188,6 +199,7 @@ static struct sdhci_pci_data *get_sdhci_platform_data(struct pci_dev *pdev)
 		break;
 	case PCI_DEVICE_ID_INTEL_MFD_SD:
 		pdata = &mfld_sdhci_pci_data[SD_INDEX];
+		pdata->quirks = sdhci_pdata_quirks;
 		break;
 	case PCI_DEVICE_ID_INTEL_MFD_SDIO1:
 		pdata = &mfld_sdhci_pci_data[SDIO_INDEX];
@@ -205,6 +217,7 @@ static struct sdhci_pci_data *get_sdhci_platform_data(struct pci_dev *pdev)
 		break;
 	case PCI_DEVICE_ID_INTEL_CLV_SDIO1:
 		pdata = &clv_sdhci_pci_data[SDIO_INDEX];
+		pdata->quirks = sdhci_pdata_quirks;
 		break;
 	case PCI_DEVICE_ID_INTEL_MRFL_MMC:
 		switch (PCI_FUNC(pdev->devfn)) {

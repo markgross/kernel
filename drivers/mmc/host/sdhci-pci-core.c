@@ -1680,6 +1680,9 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
 		}
 		slot->rst_n_gpio = slot->data->rst_n_gpio;
 		slot->cd_gpio = slot->data->cd_gpio;
+
+		if (slot->data->quirks)
+			host->quirks2 |= slot->data->quirks;
 	}
 
 	host->hw_name = "PCI";
