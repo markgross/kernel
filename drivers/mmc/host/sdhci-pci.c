@@ -1532,6 +1532,9 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
 		}
 		slot->rst_n_gpio = slot->data->rst_n_gpio;
 		slot->cd_gpio = slot->data->cd_gpio;
+
+		if (slot->data->quirks)
+			host->quirks2 |= slot->data->quirks;
 	}
 
 	host->hw_name = "PCI";
@@ -1581,6 +1584,9 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
 		dev_warn(&pdev->dev, "failed to setup card detect gpio\n");
 		slot->cd_idx = -1;
 	}
+
+	if (host->quirks2 & SDHCI_QUIRK2_ENABLE_MMC_PM_IGNORE_PM_NOTIFY)
+		host->mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
 
 	ret = sdhci_add_host(host);
 	if (ret)
