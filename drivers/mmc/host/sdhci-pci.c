@@ -447,6 +447,7 @@ static int byt_sd_probe_slot(struct sdhci_pci_slot *slot)
 }
 
 static const struct sdhci_pci_fixes sdhci_intel_byt_emmc = {
+	.quirks2	= SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 	.allow_runtime_pm = true,
 	.probe_slot	= byt_emmc_probe_slot,
 	.quirks		= SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC,
@@ -463,9 +464,7 @@ static const struct sdhci_pci_fixes sdhci_intel_byt_sdio = {
 };
 
 static const struct sdhci_pci_fixes sdhci_intel_byt_sd = {
-	.quirks2	= SDHCI_QUIRK2_PRESET_VALUE_BROKEN |
-		SDHCI_QUIRK2_POWER_PIN_GPIO_MODE,
-	.allow_runtime_pm = true,
+	.quirks2	= SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 	.probe_slot	= byt_sd_probe_slot,
 	.remove_slot	= byt_sd_remove_slot,
 };
