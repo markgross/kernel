@@ -281,7 +281,8 @@ static int dwc_otg_notify_charger_type(struct dwc_otg2 *otg,
 static int dwc_otg_get_chrg_status(struct usb_phy *x, void *data)
 {
 	unsigned long flags;
-	struct otg_bc_cap *cap = (struct otg_bc_cap *)data;
+	struct power_supply_cable_props *cap =
+		(struct power_supply_cable_props *)data;
 	struct dwc_otg2 *otg = the_transceiver;
 
 	if (!x)
@@ -292,7 +293,7 @@ static int dwc_otg_get_chrg_status(struct usb_phy *x, void *data)
 
 	spin_lock_irqsave(&otg->lock, flags);
 	cap->chrg_type = otg->charging_cap.chrg_type;
-	cap->chrg_state = otg->charging_cap.chrg_state;
+	cap->chrg_evt = otg->charging_cap.chrg_evt;
 	cap->ma = otg->charging_cap.ma;
 	spin_unlock_irqrestore(&otg->lock, flags);
 
@@ -512,7 +513,7 @@ static enum dwc_otg_state do_connector_id_status(struct dwc_otg2 *otg)
 	spin_lock_irqsave(&otg->lock, flags);
 	otg->charging_cap.chrg_type = CHRG_UNKNOWN;
 	otg->charging_cap.ma = 0;
-	otg->charging_cap.chrg_state = OTG_CHR_STATE_DISCONNECTED;
+	otg->charging_cap.chrg_evt = POWER_SUPPLY_CHARGER_EVENT_DISCONNECT;
 	spin_unlock_irqrestore(&otg->lock, flags);
 
 	otg_mask = OEVT_CONN_ID_STS_CHNG_EVNT |

@@ -23,6 +23,7 @@
 #include <linux/usb.h>
 #include <linux/device.h>
 #include <linux/compiler.h>
+#include <linux/power_supply.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/hcd.h>
 #include <linux/usb/ulpi.h>
@@ -85,6 +86,7 @@ struct dwc_device_par {
 #define GUSB2PHYCFG0				0xc200
 #define GUSB2PHYCFG_SUS_PHY                     0x40
 #define GUSB2PHYCFG_PHYSOFTRST (1 << 31)
+#define GUSB2PHYCFG_ULPI_AUTO_RESUME (1 << 15)
 
 #define EXTEND_ULPI_REGISTER_ACCESS_MASK	0xC0
 #define GUSB2PHYACC0	0xc280
@@ -358,6 +360,8 @@ struct dwc_otg2 {
 	/** User space ID switch event */
 #define USER_ID_A_CHANGE_EVENT 0x01
 #define USER_ID_B_CHANGE_EVENT 0x02
+       /** a_bus_drop event from userspace */
+#define USER_A_BUS_DROP 0x40
 
 	/* States */
 	enum dwc_otg_state prev;
@@ -366,7 +370,7 @@ struct dwc_otg2 {
 	struct platform_device *gadget;
 
 	/* Charger detection */
-	struct otg_bc_cap charging_cap;
+	struct power_supply_cable_props charging_cap;
 	struct notifier_block nb;
 
 	/* Interfaces between host/device driver */
@@ -430,11 +434,23 @@ struct dwc3_otg_hw_ops {
 	int (*b_idle)(struct dwc_otg2 *otg);
 	int (*do_charging)(struct dwc_otg2 *otg);
 	int (*notify_charger_type)(struct dwc_otg2 *otg,
-			enum usb_charger_state state);
-	enum usb_charger_type (*get_charger_type)(struct dwc_otg2 *otg);
+			enum power_supply_charger_event event);
+	enum power_supply_charger_cable_type
+		(*get_charger_type)(struct dwc_otg2 *otg);
 	int (*enable_vbus)(struct dwc_otg2 *otg, int enable);
 	int (*get_id)(struct dwc_otg2 *otg);
+
+	int (*idle)(struct dwc_otg2 *otg);
+	int (*suspend)(struct dwc_otg2 *otg);
+	int (*resume)(struct dwc_otg2 *otg);
 };
+
+#define OTG_USB2_100MA                          0xfff1
+#define OTG_USB3_150MA                          0xfff2
+#define OTG_USB2_500MA                          0xfff3
+#define OTG_USB3_900MA                          0xfff4
+#define OTG_DEVICE_SUSPEND                      0xfffe
+#define OTG_DEVICE_RESUME                       0xffff
 
 void dwc3_wakeup_otg_thread(struct dwc_otg2 *otg);
 struct dwc_otg2 *dwc3_get_otg(void);

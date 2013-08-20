@@ -27,6 +27,7 @@ enum usb_phy_events {
 	USB_EVENT_ID,           /* id was grounded */
 	USB_EVENT_CHARGER,      /* usb dedicated charger */
 	USB_EVENT_ENUMERATED,   /* gadget driver enumerated */
+	USB_EVENT_DRIVE_VBUS,	/* drive vbus request */
 };
 
 /* associate a type with PHY */
@@ -77,6 +78,7 @@ struct usb_phy {
 	unsigned int		 flags;
 
 	enum usb_phy_type	type;
+	enum usb_otg_state      state;
 	enum usb_phy_events	last_event;
 
 	struct usb_otg		*otg;
@@ -122,6 +124,9 @@ struct usb_phy {
 			enum usb_device_speed speed);
 	int	(*notify_disconnect)(struct usb_phy *x,
 			enum usb_device_speed speed);
+
+	/* check charger status */
+	int     (*get_chrg_status)(struct usb_phy *x, void *data);
 };
 
 /**
