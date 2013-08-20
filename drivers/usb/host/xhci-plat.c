@@ -275,10 +275,26 @@ static int __init xhci_plat_init(void)
 	xhci_plat_hc_driver.start = xhci_plat_start;
 	return platform_driver_register(&usb_xhci_driver);
 }
+
+#ifdef CONFIG_USB_DWC3_HOST_INTEL
+#include "../dwc3/dwc3-host-intel.c"
+#endif
+
+int xhci_register_plat(void)
+{
+#ifdef CONFIG_USB_DWC3_HOST_INTEL
+	return platform_driver_register(&dwc3_xhci_driver);
+#endif
+	return platform_driver_register(&usb_xhci_driver);
+}
 module_init(xhci_plat_init);
 
 static void __exit xhci_plat_exit(void)
 {
+#ifdef CONFIG_USB_DWC3_HOST_INTEL
+	platform_driver_unregister(&dwc3_xhci_driver);
+	return;
+#endif
 	platform_driver_unregister(&usb_xhci_driver);
 }
 module_exit(xhci_plat_exit);
