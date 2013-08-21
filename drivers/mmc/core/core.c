@@ -1641,7 +1641,7 @@ void mmc_power_up(struct mmc_host *host, u32 ocr)
 	 * This delay should be sufficient to allow the power supply
 	 * to reach the minimum voltage.
 	 */
-	mmc_delay(10);
+	usleep_range(10000, 11000);
 
 	mmc_pwrseq_post_power_on(host);
 
@@ -1654,7 +1654,7 @@ void mmc_power_up(struct mmc_host *host, u32 ocr)
 	 * This delay must be at least 74 clock sizes, or 1 ms, or the
 	 * time required to reach a stable voltage.
 	 */
-	mmc_delay(10);
+	usleep_range(5000, 6000);
 
 	mmc_host_clk_release(host);
 }
