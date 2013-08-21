@@ -129,6 +129,7 @@ config USB_DWC3_HOST_INTEL
 	  enable host mode on Intel platform, then you have to enable this config.
 
 comment "Debugging features"
+
 config USB_DWC3_DEBUG
 	bool "Enable Debugging Messages"
 	help
