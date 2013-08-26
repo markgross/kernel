@@ -357,4 +357,10 @@ config XILINX_XADC
 	  The driver can also be build as a module. If so, the module will be called
 	  xilinx-xadc.
 
+config IIO_BASINCOVE_GPADC
+	tristate "IIO Basincove GPADC driver"
+	depends on IIO
+	help
+	  Say yes here to build support for the IIO basincove GPADC driver.
+
 endmenu

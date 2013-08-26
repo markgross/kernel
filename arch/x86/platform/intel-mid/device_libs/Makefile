@@ -22,5 +22,14 @@ obj-$(subst m,y,$(CONFIG_DRM_MEDFIELD)) += platform_tc35876x.o
 # MISC Devices
 obj-$(subst m,y,$(CONFIG_KEYBOARD_GPIO)) += platform_gpio_keys.o
 obj-$(subst m,y,$(CONFIG_INTEL_MID_WATCHDOG)) += platform_wdt.o
+# ADC
+obj-$(subst m,y,$(CONFIG_MSIC_GPADC))	+= platform_msic_adc.o
+obj-$(subst m,y,$(CONFIG_IIO_BASINCOVE_GPADC))	+= platform_bcove_adc.o
 # SD Devices
 obj-$(subst m,y,$(CONFIG_WILINK_PLATFORM_DATA)) += platform_wl12xx.o
+#I2C Devices
+ifdef CONFIG_BATTERY_MAX17042
+obj-$(subst m,y,$(CONFIG_BATTERY_MAX17042)) += platform_max17042.o
+else
+obj-$(subst m,y,$(CONFIG_BATTERY_MAX17050)) += platform_max17042.o
+endif
