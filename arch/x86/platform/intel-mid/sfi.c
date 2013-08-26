@@ -319,7 +319,7 @@ void intel_scu_devices_destroy(void)
 }
 EXPORT_SYMBOL_GPL(intel_scu_devices_destroy);
 
-static void __init install_irq_resource(struct platform_device *pdev, int irq)
+void __init install_irq_resource(struct platform_device *pdev, int irq)
 {
 	/* Single threaded */
 	static struct resource res __initdata = {

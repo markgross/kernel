@@ -18,6 +18,14 @@
 #include <linux/platform_device.h>
 #include <asm/intel_mid_pcihelpers.h>
 
+#ifdef CONFIG_SFI
+extern void install_irq_resource(struct platform_device *pdev, int irq);
+#else
+/* Dummy function to prevent compilation error in byt */
+extern void install_irq_resource(struct platform_device *pdev, int irq)
+{};
+#endif
+
 #define INTEL_MID_SSN_SIZE     32
 
 /*
