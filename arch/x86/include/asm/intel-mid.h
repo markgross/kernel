@@ -14,11 +14,7 @@
 #include <linux/sfi.h>
 #include <linux/platform_device.h>
 #include <asm/spid.h>
-
-#define INTEL_MID_SSN_SIZE	32
-
-extern struct soft_platform_id spid;
-extern char intel_mid_ssn[INTEL_MID_SSN_SIZE + 1];
+#include <asm/intel_mid_pcihelpers.h>
 
 /*
  * Access to message bus through three registers
@@ -47,10 +43,7 @@ extern int __init sfi_parse_mrtc(struct sfi_table_header *table);
 extern int __init sfi_parse_mtmr(struct sfi_table_header *table);
 extern int sfi_mrtc_num;
 extern struct sfi_rtc_table_entry sfi_mrtc_array[];
-extern u32 intel_mid_msgbus_read32_raw(u32 cmd);
-extern void intel_mid_msgbus_write32_raw(u32 cmd, u32 data);
-extern u32 intel_mid_msgbus_read32(u8 port, u32 addr);
-extern void intel_mid_msgbus_write32(u8 port, u32 addr, u32 data);
+extern void *get_oem0_table(void);
 extern void register_rpmsg_service(char *name, int id, u32 addr);
 extern int sdhci_pci_request_regulators(void);
 
