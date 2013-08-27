@@ -441,6 +441,48 @@ void iio_channel_release_all(struct iio_channel *channels)
 }
 EXPORT_SYMBOL_GPL(iio_channel_release_all);
 
+int iio_channel_get_num(const struct iio_channel *chan)
+{
+	int num = 0;
+
+	if (chan == NULL)
+		return -ENODEV;
+
+	while (chan[num].indio_dev)
+		num++;
+
+	return num;
+}
+EXPORT_SYMBOL_GPL(iio_channel_get_num);
+
+int iio_channel_get_name(const struct iio_channel *chan, char **chan_name)
+{
+	int i = 0;
+	struct iio_map_internal *c = NULL;
+
+	if (chan == NULL)
+		return -ENODEV;
+
+	if (chan_name == NULL)
+		return -EINVAL;
+
+	while (chan[i].indio_dev) {
+		mutex_lock(&iio_map_list_lock);
+		list_for_each_entry(c, &iio_map_list, l) {
+			if (strcmp(chan[i].channel->datasheet_name,
+				c->map->adc_channel_label) != 0)
+				continue;
+			strcpy(chan_name[i], c->map->consumer_channel);
+			break;
+		}
+		mutex_unlock(&iio_map_list_lock);
+		i++;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(iio_channel_get_name);
+
 static int iio_channel_read(struct iio_channel *chan, int *val, int *val2,
 	enum iio_chan_info_enum info)
 {
