@@ -18,7 +18,6 @@
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
-#include <linux/types.h>
 
 #include "spi-dw.h"
 
@@ -52,11 +51,13 @@ static int mid_spi_dma_init(struct dw_spi *dws)
 
 	/*
 	 * Get pci device for DMA controller, currently it could only
-	 * be the DMA controller of Medfield
+	 * be the DMA controller of Merrifield
 	 */
-	dma_dev = pci_get_device(PCI_VENDOR_ID_INTEL, 0x0827, NULL);
-	if (!dma_dev)
-		return -ENODEV;
+	dws->dmac = pci_get_device(PCI_VENDOR_ID_INTEL, 0x0813, NULL);
+	if (!dws->dmac)
+		dws->dmac = pci_get_device(PCI_VENDOR_ID_INTEL, 0x0827, NULL);
+	if (!dws->dmac)
+		dws->dmac = pci_get_device(PCI_VENDOR_ID_INTEL, 0x08EF, NULL);
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
@@ -149,77 +150,76 @@ static void dw_spi_dma_tx_done(void *arg)
 static struct dma_async_tx_descriptor *dw_spi_dma_prepare_tx(struct dw_spi *dws,
 		struct spi_transfer *xfer)
 {
-	struct dma_slave_config txconf;
-	struct dma_async_tx_descriptor *txdesc;
+	struct dma_async_tx_descriptor *txdesc = NULL, *rxdesc = NULL;
+	struct dma_chan *txchan, *rxchan;
+	struct dma_slave_config *txconf, *rxconf;
+	u16 dma_ctrl = 0;
+	enum dma_ctrl_flags flag;
+	struct device *dev = &dws->master->dev;
+	struct intel_mid_dma_slave *rxs, *txs;
 
 	if (!xfer->tx_buf)
 		return NULL;
 
-	txconf.direction = DMA_MEM_TO_DEV;
-	txconf.dst_addr = dws->dma_addr;
-	txconf.dst_maxburst = 16;
-	txconf.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	txconf.dst_addr_width = convert_dma_width(dws->dma_width);
-	txconf.device_fc = false;
+	txs = txchan->private;
+	rxs = rxchan->private;
 
-	dmaengine_slave_config(dws->txchan, &txconf);
+	txconf = &txs->dma_slave;
+	rxconf = &rxs->dma_slave;
 
-	txdesc = dmaengine_prep_slave_sg(dws->txchan,
-				xfer->tx_sg.sgl,
-				xfer->tx_sg.nents,
-				DMA_MEM_TO_DEV,
-				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
-	if (!txdesc)
-		return NULL;
+	flag = DMA_PREP_INTERRUPT | DMA_COMPL_SKIP_DEST_UNMAP | DMA_CTRL_ACK;
 
-	txdesc->callback = dw_spi_dma_tx_done;
-	txdesc->callback_param = dws;
+	/* 2. Prepare the TX dma transfer */
+	txconf->direction = DMA_MEM_TO_DEV;
+	txconf->dst_addr = dws->dma_addr;
+	txconf->src_maxburst = LNW_DMA_MSIZE_16;
+	txconf->dst_maxburst = LNW_DMA_MSIZE_16;
+	txconf->src_addr_width = dws->dma_width;
+	txconf->dst_addr_width = dws->dma_width;
+	txconf->device_fc = false;
 
-	return txdesc;
-}
+	txchan->device->device_control(txchan, DMA_SLAVE_CONFIG,
+				       (unsigned long) txconf);
 
-/*
- * dws->dma_chan_busy is set before the dma transfer starts, callback for rx
- * channel will clear a corresponding bit.
- */
-static void dw_spi_dma_rx_done(void *arg)
-{
-	struct dw_spi *dws = arg;
+	txdesc = txchan->device->device_prep_dma_memcpy
+		(txchan,			/* DMA Channel */
+		dws->dma_addr,			/* DAR */
+		dws->tx_dma,			/* SAR */
+		dws->len,			/* Data Length */
+		flag);
+	if (txdesc) {
+		txdesc->callback = dw_spi_dma_done;
+		txdesc->callback_param = dws;
+	} else {
+		dev_err(dev, "ERROR: prepare txdesc failed\n");
+		return -EINVAL;
+	}
 
-	clear_bit(RX_BUSY, &dws->dma_chan_busy);
-	if (test_bit(TX_BUSY, &dws->dma_chan_busy))
-		return;
-	spi_finalize_current_transfer(dws->master);
-}
+	/* 3. Prepare the RX dma transfer */
+	rxconf->direction = DMA_DEV_TO_MEM;
+	rxconf->src_addr = dws->dma_addr;
+	rxconf->src_maxburst = LNW_DMA_MSIZE_16;
+	rxconf->dst_maxburst = LNW_DMA_MSIZE_16;
+	rxconf->dst_addr_width = dws->dma_width;
+	rxconf->src_addr_width = dws->dma_width;
+	rxconf->device_fc = false;
 
-static struct dma_async_tx_descriptor *dw_spi_dma_prepare_rx(struct dw_spi *dws,
-		struct spi_transfer *xfer)
-{
-	struct dma_slave_config rxconf;
-	struct dma_async_tx_descriptor *rxdesc;
+	rxchan->device->device_control(rxchan, DMA_SLAVE_CONFIG,
+				       (unsigned long) rxconf);
 
-	if (!xfer->rx_buf)
-		return NULL;
-
-	rxconf.direction = DMA_DEV_TO_MEM;
-	rxconf.src_addr = dws->dma_addr;
-	rxconf.src_maxburst = 16;
-	rxconf.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	rxconf.src_addr_width = convert_dma_width(dws->dma_width);
-	rxconf.device_fc = false;
-
-	dmaengine_slave_config(dws->rxchan, &rxconf);
-
-	rxdesc = dmaengine_prep_slave_sg(dws->rxchan,
-				xfer->rx_sg.sgl,
-				xfer->rx_sg.nents,
-				DMA_DEV_TO_MEM,
-				DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
-	if (!rxdesc)
-		return NULL;
-
-	rxdesc->callback = dw_spi_dma_rx_done;
-	rxdesc->callback_param = dws;
+	rxdesc = rxchan->device->device_prep_dma_memcpy
+		(rxchan,			/* DMA Channel */
+		dws->rx_dma,			/* DAR */
+		dws->dma_addr,			/* SAR */
+		dws->len,			/* Data Length */
+		flag);
+	if (rxdesc) {
+		rxdesc->callback = dw_spi_dma_done;
+		rxdesc->callback_param = dws;
+	} else {
+		dev_err(dev, "ERROR: prepare rxdesc failed\n");
+		return -EINVAL;
+	}
 
 	return rxdesc;
 }
@@ -304,12 +304,12 @@ static struct dw_spi_dma_ops mid_dma_ops = {
 #define CLK_SPI_CDIV_MASK	0x00000e00
 #define CLK_SPI_DISABLE_OFFSET	8
 
-int dw_spi_mid_init(struct dw_spi *dws)
+int dw_spi_mid_init(struct dw_spi *dws, int bus_num)
 {
 	void __iomem *clk_reg;
 	u32 clk_cdiv;
 
-	clk_reg = ioremap_nocache(MRST_CLK_SPI_REG, 16);
+	clk_reg = ioremap_nocache(MRST_CLK_SPI0_REG + bus_num * 4, 16);
 	if (!clk_reg)
 		return -ENOMEM;
 

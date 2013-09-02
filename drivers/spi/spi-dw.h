@@ -112,6 +112,16 @@ struct dw_spi {
 	u16			bus_num;
 	u16			num_cs;		/* supported slave numbers */
 
+	/* Driver message queue */
+	struct workqueue_struct	*workqueue;
+	struct work_struct	pump_messages;
+	spinlock_t		lock;
+	struct list_head	queue;
+	int			run;
+
+	/* Message Transfer pump */
+	struct tasklet_struct	pump_transfers;
+
 	/* Current message transfer state info */
 	size_t			len;
 	void			*tx;
@@ -206,7 +216,10 @@ extern int dw_spi_add_host(struct device *dev, struct dw_spi *dws);
 extern void dw_spi_remove_host(struct dw_spi *dws);
 extern int dw_spi_suspend_host(struct dw_spi *dws);
 extern int dw_spi_resume_host(struct dw_spi *dws);
+extern void dw_spi_xfer_done(struct dw_spi *dws);
+extern int dw_spi_stop_queue(struct dw_spi *dws);
 
 /* platform related setup */
-extern int dw_spi_mid_init(struct dw_spi *dws); /* Intel MID platforms */
+/* Intel MID platforms */
+extern int dw_spi_mid_init(struct dw_spi *dws, int bus_num);
 #endif /* DW_SPI_HEADER_H */
