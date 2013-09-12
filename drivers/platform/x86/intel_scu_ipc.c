@@ -582,7 +582,28 @@ int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
 	for (i = 0; i < ((inlen + 3) / 4); i++)
 		ipc_data_writel(wbuf[i], 4 * i);
 
-	ipc_command((inlen << 16) | (sub << 12) | cmd);
+	/**
+	 * Watchdog IPC command is an exception here using double word
+	 * as the unit of input data size because of historical reasons
+	 * and SCU FW is doing so.
+	 */
+	if ((cmd & 0xFF) == IPCMSG_WATCHDOG_TIMER)
+		inlen = (inlen + 3) / 4;
+	/*
+	 *  In case of 3 pmic writes or read-modify-writes
+	 *  there are holes in the middle of the buffer which are
+	 *  ignored by SCU. These bytes should not be included into
+	 *  size of the ipc msg. Holes are as follows:
+	 *  write: wbuf[6 & 7]
+	 *  read-modifu-write: wbuf[6 & 7 & 11]
+	 */
+	else if ((cmd & 0xFF) == IPCMSG_PCNTRL) {
+		if (sub == IPC_CMD_PCNTRL_W && inlen == 11)
+			inlen -= 2;
+		else if (sub == IPC_CMD_PCNTRL_M && inlen == 15)
+			inlen -= 3;
+	}
+	intel_scu_ipc_send_command((inlen << 16) | (sub << 12) | cmd);
 	err = intel_scu_ipc_check_status();
 
 	if (!err) {
