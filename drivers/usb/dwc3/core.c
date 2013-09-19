@@ -39,6 +39,7 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/of.h>
 #include <linux/usb/otg.h>
+#include <linux/usb/ulpi.h>
 
 #include "platform_data.h"
 #include "core.h"
