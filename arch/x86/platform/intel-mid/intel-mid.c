@@ -38,6 +38,7 @@
 #include <asm/reboot.h>
 
 #include "intel_mid_weak_decls.h"
+#include "intel_soc_pmu.h"
 
 /*
  * the clockevent devices on Moorestown/Medfield can be APBT or LAPIC clock,
@@ -69,8 +70,15 @@ static void *(*get_intel_mid_ops[])(void) = INTEL_MID_OPS_INIT;
 enum intel_mid_cpu_type __intel_mid_cpu_chip;
 EXPORT_SYMBOL_GPL(__intel_mid_cpu_chip);
 
+static int force_cold_boot;
+module_param(force_cold_boot, int, 0644);
+MODULE_PARM_DESC(force_cold_boot,
+		 "Set to Y to force a COLD BOOT instead of a COLD RESET "
+		 "on the next reboot system call.");
+u32 nbr_hsi_clients = 2;
 static void intel_mid_power_off(void)
 {
+	pmu_power_off();
 };
 
 static void intel_mid_reboot(void)
@@ -78,6 +86,9 @@ static void intel_mid_reboot(void)
 	/* Call below replaced with rpmsg_* calls ported from 3.10 */
 	//intel_scu_ipc_simple_command(IPCMSG_COLD_BOOT, 0);
 
+	if (intel_scu_ipc_fw_update()) {
+		pr_debug("intel_scu_fw_update: IFWI upgrade failed...\n");
+	}
 	if (force_cold_boot)
 		rpmsg_send_generic_simple_command(IPCMSG_COLD_BOOT, 0);
 	else
