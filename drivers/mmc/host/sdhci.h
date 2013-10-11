@@ -575,6 +575,11 @@ struct sdhci_ops {
 					 struct mmc_card *card,
 					 unsigned int max_dtr, int host_drv,
 					 int card_drv, int *drv_type);
+	int	(*power_up_host)(struct sdhci_host *host);
+	void	(*set_dev_power)(struct sdhci_host *, bool);
+	int	(*get_cd)(struct sdhci_host *host);
+	int	(*get_tuning_count)(struct sdhci_host *host);
+	int	(*gpio_buf_check)(struct sdhci_host *host, unsigned int clk);
 };
 
 #ifdef CONFIG_MMC_SDHCI_IO_ACCESSORS
