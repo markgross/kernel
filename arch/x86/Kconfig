@@ -511,6 +511,37 @@ config X86_INTEL_QUARK
 	  Say Y here if you have a Quark based system such as the Arduino
 	  compatible Intel Galileo.
 
+config ATOM_SOC_POWER
+	bool "Select Atom SOC Power"
+
+choice
+	prompt "Select PMU support"
+	depends on ATOM_SOC_POWER
+	default REMOVEME_INTEL_ATOM_MDFLD_POWER
+
+config REMOVEME_INTEL_ATOM_MDFLD_POWER
+	bool "Medfield"
+
+config REMOVEME_INTEL_ATOM_CLV_POWER
+	bool "Clovertrail"
+
+config REMOVEME_INTEL_ATOM_MRFLD_POWER
+	bool "Merrifield"
+
+endchoice
+
+config INTEL_DEBUG_FEATURE
+       bool "Debug feature interface on Intel MID platform"
+       depends on X86_INTEL_MID
+       ---help---
+         Provides an interface to list the debug features
+	 that are enabled on an Intel MID platform. The
+	 enabling of the debug features depends on the mode
+	 the device is in (e.g. manufacturing, production,
+	 end user, etc...).
+
+endif
+
 config X86_INTEL_LPSS
 	bool "Intel Low Power Subsystem Support"
 	depends on ACPI
