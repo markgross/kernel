@@ -2047,6 +2047,7 @@ static struct irq_chip ioapic_chip __read_mostly = {
 	.irq_set_wake		= ioapic_set_wake,
 };
 
+
 static inline void init_IO_APIC_traps(void)
 {
 	struct irq_cfg *cfg;
