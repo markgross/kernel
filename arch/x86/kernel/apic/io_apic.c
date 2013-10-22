@@ -1700,6 +1700,11 @@ static unsigned int startup_ioapic_irq(struct irq_data *data)
 	return was_pending;
 }
 
+static int ioapic_set_wake(struct irq_data *data, unsigned int on)
+{
+	return 0;
+}
+
 atomic_t irq_mis_count;
 
 #ifdef CONFIG_GENERIC_PENDING_IRQ
@@ -1894,6 +1899,7 @@ static struct irq_chip ioapic_chip __read_mostly = {
 	.irq_eoi		= ioapic_ack_level,
 	.irq_set_affinity	= ioapic_set_affinity,
 	.flags			= IRQCHIP_SKIP_SET_WAKE,
+	.irq_set_wake		= ioapic_set_wake,
 };
 
 static struct irq_chip ioapic_ir_chip __read_mostly = {
