@@ -1880,6 +1880,11 @@ int native_ioapic_set_affinity(struct irq_data *data,
 	return ret;
 }
 
+static int ioapic_set_wake(struct irq_data *data, unsigned int on)
+{
+	return 0;
+}
+
 atomic_t irq_mis_count;
 
 #ifdef CONFIG_GENERIC_PENDING_IRQ
@@ -2039,6 +2044,7 @@ static struct irq_chip ioapic_chip __read_mostly = {
 	.irq_set_affinity	= native_ioapic_set_affinity,
 	.irq_retrigger		= apic_retrigger_irq,
 	.flags			= IRQCHIP_SKIP_SET_WAKE,
+	.irq_set_wake		= ioapic_set_wake,
 };
 
 static inline void init_IO_APIC_traps(void)
