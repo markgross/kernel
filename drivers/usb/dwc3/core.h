@@ -452,6 +452,10 @@ struct dwc3_ep {
 	struct dwc3		*dwc;
 
 	u32			saved_state;
+	struct ebc_io		*ebc;
+#define DWC3_EP_EBC_OUT_NB	16
+#define DWC3_EP_EBC_IN_NB	17
+
 	unsigned		flags;
 #define DWC3_EP_ENABLED		(1 << 0)
 #define DWC3_EP_STALL		(1 << 1)
@@ -974,6 +978,23 @@ struct dwc3_gadget_ep_cmd_params {
 	u32	param1;
 	u32	param0;
 };
+
+struct ebc_io {
+	const char	*name;
+	const char	*epname;
+	u8		epnum;
+	u8		is_ondemand;
+	u8		static_trb_pool_size;
+	struct list_head	list;
+	int		(*init) (void);
+	void		*(*alloc_static_trb_pool) (dma_addr_t *dma_addr);
+	void		(*free_static_trb_pool) (void);
+	int		(*xfer_start) (void);
+	int		(*xfer_stop) (void);
+};
+
+void dwc3_register_io_ebc(struct ebc_io *ebc);
+void dwc3_unregister_io_ebc(struct ebc_io *ebc);
 
 /*
  * DWC3 Features to be used as Driver Data
