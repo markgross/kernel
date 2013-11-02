@@ -171,7 +171,9 @@ static char *ipc_err_sources[] = {
 	[IPC_ERR_CMD_FAILED] =
 		"command failed",
 	[IPC_ERR_EMSECURITY] =
-		"unsigned kernel",
+		"Invalid Battery",
+	[IPC_ERR_UNSIGNEDKERNEL] =
+		"Unsigned kernel",
 };
 
 /*
@@ -286,9 +288,25 @@ static inline int busy_loop(void)
 		status = ipc_read_status();
 	}
 
-	if (status & BIT(0)) {
-		dev_err(&ipcdev.pdev->dev, "IPC timed out");
-		return -ETIMEDOUT;
+	status = ipc_read_status();
+	if (ret == -ETIMEDOUT)
+		dev_err(&ipcdev.pdev->dev,
+			"IPC timed out, IPC_STS=0x%x, IPC_CMD=0x%x\n",
+			status, ipcdev.cmd);
+
+	if (status & 0x2) {
+		ret = -EIO;
+		i = (status >> 16) & 0xFF;
+		if (i < ARRAY_SIZE(ipc_err_sources))
+			dev_err(&ipcdev.pdev->dev,
+				"IPC failed: %s, IPC_STS=0x%x, IPC_CMD=0x%x\n",
+				ipc_err_sources[i], status, ipcdev.cmd);
+		else
+			dev_err(&ipcdev.pdev->dev,
+				"IPC failed: unknown error, IPC_STS=0x%x, "
+				"IPC_CMD=0x%x\n", status, ipcdev.cmd);
+		if ((i == IPC_ERR_UNSIGNEDKERNEL) || (i == IPC_ERR_EMSECURITY))
+			ret = -EACCES;
 	}
 
 	if (status & BIT(1))
