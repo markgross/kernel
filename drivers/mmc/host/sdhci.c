@@ -176,6 +176,21 @@ static void sdhci_disable_card_detection(struct sdhci_host *host)
 	sdhci_set_card_detection(host, false);
 }
 
+static void sdhci_busy_wait(struct mmc_host *mmc, u32 delay)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	/* totally 'delay' us, each loop 4us */
+	u32 loop = delay / 4;
+	while (loop) {
+		/* have a delay here */
+		udelay(4);
+		/* read register to make sure host won't be clock gated */
+		sdhci_readw(host, SDHCI_HOST_VERSION);
+		loop--;
+	}
+}
+
 void sdhci_reset(struct sdhci_host *host, u8 mask)
 {
 	unsigned long timeout;
@@ -998,6 +1013,8 @@ static void sdhci_finish_data(struct sdhci_host *host)
 		 * upon error conditions.
 		 */
 		if (data->error) {
+			if (host->quirks2 & SDHCI_QUIRK2_WAIT_FOR_IDLE)
+				sdhci_busy_wait(host->mmc, 1000);
 			sdhci_do_reset(host, SDHCI_RESET_CMD);
 			sdhci_do_reset(host, SDHCI_RESET_DATA);
 		}
@@ -2451,6 +2468,8 @@ static void sdhci_card_event(struct mmc_host *mmc)
 		pr_err("%s: Resetting controller.\n",
 			mmc_hostname(host->mmc));
 
+		if (host->quirks2 & SDHCI_QUIRK2_WAIT_FOR_IDLE)
+			sdhci_busy_wait(mmc, 1000);
 		sdhci_do_reset(host, SDHCI_RESET_CMD);
 		sdhci_do_reset(host, SDHCI_RESET_DATA);
 
@@ -2475,6 +2494,7 @@ static const struct mmc_host_ops sdhci_ops = {
 	.execute_tuning			= sdhci_execute_tuning,
 	.card_event			= sdhci_card_event,
 	.card_busy	= sdhci_card_busy,
+	.busy_wait	= sdhci_busy_wait,
 };
 
 /*****************************************************************************\
@@ -2524,6 +2544,8 @@ static void sdhci_tasklet_finish(unsigned long param)
 
 		/* Spec says we should do both at the same time, but Ricoh
 		   controllers do not like that. */
+		if (host->quirks2 & SDHCI_QUIRK2_WAIT_FOR_IDLE)
+			sdhci_busy_wait(host->mmc, 1000);
 		sdhci_do_reset(host, SDHCI_RESET_CMD);
 		sdhci_do_reset(host, SDHCI_RESET_DATA);
 	}

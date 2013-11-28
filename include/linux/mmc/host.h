@@ -141,6 +141,9 @@ struct mmc_host_ops {
 	 */
 	int	(*multi_io_quirk)(struct mmc_card *card,
 				  unsigned int direction, int blk_size);
+
+	/* Prevent host controller from Auto Clock Gating by busy reading */
+	void	(*busy_wait)(struct mmc_host *mmc, u32 delay);
 };
 
 struct mmc_card;
