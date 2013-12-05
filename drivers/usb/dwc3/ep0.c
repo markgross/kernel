@@ -419,6 +419,9 @@ static int dwc3_ep0_handle_feature(struct dwc3 *dwc,
 			if (dwc->speed != DWC3_DSTS_SUPERSPEED)
 				return -EINVAL;
 
+			if (dwc->is_ebc)
+				break;
+
 			reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 			if (set)
 				reg |= DWC3_DCTL_INITU1ENA;
@@ -432,6 +435,9 @@ static int dwc3_ep0_handle_feature(struct dwc3 *dwc,
 				return -EINVAL;
 			if (dwc->speed != DWC3_DSTS_SUPERSPEED)
 				return -EINVAL;
+
+			if (dwc->is_ebc)
+				break;
 
 			reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 			if (set)
@@ -571,9 +577,12 @@ static int dwc3_ep0_set_config(struct dwc3 *dwc, struct usb_ctrlrequest *ctrl)
 			 * Enable transition to U1/U2 state when
 			 * nothing is pending from application.
 			 */
-			reg = dwc3_readl(dwc->regs, DWC3_DCTL);
-			reg |= (DWC3_DCTL_ACCEPTU1ENA | DWC3_DCTL_ACCEPTU2ENA);
-			dwc3_writel(dwc->regs, DWC3_DCTL, reg);
+			if (!dwc->is_ebc) {
+				reg = dwc3_readl(dwc->regs, DWC3_DCTL);
+				reg |= (DWC3_DCTL_ACCEPTU1ENA
+					| DWC3_DCTL_ACCEPTU2ENA);
+				dwc3_writel(dwc->regs, DWC3_DCTL, reg);
+			}
 
 			dwc->resize_fifos = true;
 			dwc3_trace(trace_dwc3_ep0, "resize FIFOs flag SET");
