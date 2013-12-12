@@ -18,6 +18,7 @@
 #include <linux/leds.h>
 #include <linux/spinlock.h>
 #include <linux/notifier.h>
+#include <linux/types.h>
 
 /*
  * All voltages, currents, charges, energies, time and temperatures in uV,
@@ -160,6 +161,8 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_USB_HC,
 	POWER_SUPPLY_PROP_USB_OTG,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	/* Local extensions of type int64_t */
+	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -228,6 +231,7 @@ struct power_supply_cable_props {
 union power_supply_propval {
 	int intval;
 	const char *strval;
+	int64_t int64val;
 };
 
 struct device_node;
