@@ -23,6 +23,7 @@
 #include <linux/pci.h>
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
+#include <asm/intel-mid.h>
 
 #include "ehci.h"
 #include "pci-quirks.h"
@@ -409,6 +410,10 @@ static struct pci_driver ehci_pci_driver = {
 static int __init ehci_pci_init(void)
 {
 	if (usb_disabled())
+		return -ENODEV;
+	
+	/* If Intel Merrifield skip ehci pci initalization */
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
 		return -ENODEV;
 
 	pr_info("%s: " DRIVER_DESC "\n", hcd_name);
