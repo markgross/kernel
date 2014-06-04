@@ -25,6 +25,7 @@ obj-$(subst m,y,$(CONFIG_DRM_MEDFIELD)) += platform_tc35876x.o
 obj-$(subst m,y,$(CONFIG_GPIO_PCA953X)) += platform_pcal9555a.o
 # SPI Devices
 obj-$(subst m,y,$(CONFIG_SPI_SPIDEV)) += platform_spidev.o
+obj-$(subst m,y,$(CONFIG_TI_ADS7955_ADC)) += platform_ads7955.o
 # MISC Devices
 obj-$(subst m,y,$(CONFIG_KEYBOARD_GPIO)) += platform_gpio_keys.o
 obj-$(subst m,y,$(CONFIG_INTEL_MID_WATCHDOG)) += platform_wdt.o
