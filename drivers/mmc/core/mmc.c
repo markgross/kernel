@@ -523,6 +523,9 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		 * RPMB regions are defined in multiples of 128K.
 		 */
 		card->ext_csd.raw_rpmb_size_mult = ext_csd[EXT_CSD_RPMB_MULT];
+		card->ext_csd.rpmb_size = 128 *
+			card->ext_csd.raw_rpmb_size_mult;
+		card->ext_csd.rpmb_size <<= 2; /* Unit: half sector */
 		if (ext_csd[EXT_CSD_RPMB_MULT] && mmc_host_cmd23(card->host)) {
 			mmc_part_add(card, ext_csd[EXT_CSD_RPMB_MULT] << 17,
 				EXT_CSD_PART_CONFIG_ACC_RPMB,
@@ -582,6 +585,17 @@ static int mmc_decode_ext_csd(struct mmc_card *card, u8 *ext_csd)
 			(ext_csd[EXT_CSD_SUPPORTED_MODE] & 0x1) &&
 			!(ext_csd[EXT_CSD_FW_CONFIG] & 0x1);
 	}
+	/*
+	 * If use legacy reliable write, then the blk counts must not
+	 * big than the reliable write sectors
+	 */
+	if (!(card->ext_csd.rel_param & EXT_CSD_WR_REL_PARAM_EN)) {
+		if (card->ext_csd.rel_sectors < RPMB_AVALIABLE_SECTORS)
+			card->rpmb_max_req = card->ext_csd.rel_sectors;
+		else
+			card->rpmb_max_req = RPMB_AVALIABLE_SECTORS;
+	} else
+		card->rpmb_max_req = RPMB_AVALIABLE_SECTORS;
 out:
 	return err;
 }
@@ -716,6 +730,7 @@ MMC_DEV_ATTR(enhanced_area_offset, "%llu\n",
 MMC_DEV_ATTR(enhanced_area_size, "%u\n", card->ext_csd.enhanced_area_size);
 MMC_DEV_ATTR(raw_rpmb_size_mult, "%#x\n", card->ext_csd.raw_rpmb_size_mult);
 MMC_DEV_ATTR(rel_sectors, "%#x\n", card->ext_csd.rel_sectors);
+MMC_DEV_ATTR(rpmb_size, "%d\n", card->ext_csd.rpmb_size);
 
 static ssize_t mmc_fwrev_show(struct device *dev,
 			      struct device_attribute *attr,
@@ -751,6 +766,7 @@ static struct attribute *mmc_std_attrs[] = {
 	&dev_attr_enhanced_area_size.attr,
 	&dev_attr_raw_rpmb_size_mult.attr,
 	&dev_attr_rel_sectors.attr,
+	&dev_attr_rpmb_size.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mmc_std);
