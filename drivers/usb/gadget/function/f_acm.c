@@ -77,6 +77,9 @@ struct f_acm {
 	char *string_ctrl;
 	char *string_data;
 	char *string_iad;
+	u8 proto_func_iad;
+	u8 proto_intf_ctrl;
+	u8 proto_intf_data;
 };
 
 static inline struct f_acm *func_to_acm(struct usb_function *f)
@@ -107,7 +110,7 @@ acm_iad_descriptor = {
 	.bInterfaceCount = 	2,	// control + data
 	.bFunctionClass =	USB_CLASS_COMM,
 	.bFunctionSubClass =	USB_CDC_SUBCLASS_ACM,
-	.bFunctionProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
+	/* .bFunctionProtocol =	DYNAMIC, */
 	/* .iFunction =		DYNAMIC */
 };
 
@@ -119,7 +122,7 @@ static struct usb_interface_descriptor acm_control_interface_desc = {
 	.bNumEndpoints =	1,
 	.bInterfaceClass =	USB_CLASS_COMM,
 	.bInterfaceSubClass =	USB_CDC_SUBCLASS_ACM,
-	.bInterfaceProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
+	/* .bInterfaceProtocol = DYNAMIC, */
 	/* .iInterface = DYNAMIC */
 };
 
@@ -130,7 +133,7 @@ static struct usb_interface_descriptor acm_data_interface_desc = {
 	.bNumEndpoints =	2,
 	.bInterfaceClass =	USB_CLASS_CDC_DATA,
 	.bInterfaceSubClass =	0,
-	.bInterfaceProtocol =	0,
+	/* .bInterfaceProtocol = DYNAMIC, */
 	/* .iInterface = DYNAMIC */
 };
 
@@ -629,6 +632,10 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	acm_data_interface_desc.iInterface = us[ACM_DATA_IDX].id;
 	acm_iad_descriptor.iFunction = us[ACM_IAD_IDX].id;
 
+	acm_iad_descriptor.bFunctionProtocol = acm->proto_func_iad;
+	acm_control_interface_desc.bInterfaceProtocol = acm->proto_intf_ctrl;
+	acm_data_interface_desc.bInterfaceProtocol = acm->proto_intf_data;
+
 	/* allocate instance-specific interface IDs, and patch descriptors */
 	status = usb_interface_id(c, f);
 	if (status < 0)
@@ -747,6 +754,9 @@ struct f_acm_opts {
 	char string_iad_buf[ACM_MAX_STRING_DESC_LENGTH];
 	struct mutex lock;
 	int refcnt;
+	u8 proto_func_iad;
+	u8 proto_intf_ctrl;
+	u8 proto_intf_data;
 	u8 port_num;
 };
 
@@ -782,6 +792,9 @@ static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 	acm->string_ctrl = opts->string_ctrl_buf;
 	acm->string_data = opts->string_data_buf;
 	acm->string_iad = opts->string_iad_buf;
+	acm->proto_func_iad = opts->proto_func_iad;
+	acm->proto_intf_ctrl = opts->proto_intf_ctrl;
+	acm->proto_intf_data = opts->proto_intf_data;
 	mutex_unlock(&opts->lock);
 
 	return &acm->port.func;
@@ -874,11 +887,39 @@ DESCRIPTOR_STRING_ATTR(string_ctrl, string_ctrl_buf)
 DESCRIPTOR_STRING_ATTR(string_data, string_data_buf)
 DESCRIPTOR_STRING_ATTR(string_iad, string_iad_buf)
 
+#define DESCRIPTOR_ATTR(_name, _variable, _format_string)		\
+static ssize_t								\
+f_acm_##_name##_show(struct f_acm_opts *opts, char *buf)		\
+{									\
+	return sprintf(buf, _format_string, opts->_variable);		\
+}									\
+static ssize_t								\
+f_acm_##_name##_store(struct f_acm_opts *opts, const char *buf,		\
+	size_t size)							\
+{									\
+	int value;							\
+	if (sscanf(buf, _format_string, &value) == 1) {			\
+		opts->_variable = value;				\
+		return size;						\
+	}								\
+	return -1;							\
+}									\
+static struct f_acm_opts_attribute f_acm_##_name =			\
+	__CONFIGFS_ATTR(_name, S_IRUGO | S_IWUSR,			\
+	f_acm_##_name##_show, f_acm_##_name##_store);
+
+DESCRIPTOR_ATTR(protocol_function_iad, proto_func_iad, "%d\n")
+DESCRIPTOR_ATTR(protocol_interface_ctrl, proto_intf_ctrl, "%d\n")
+DESCRIPTOR_ATTR(protocol_interface_data, proto_intf_data, "%d\n")
+
 static struct configfs_attribute *acm_attrs[] = {
 	&f_acm_port_num.attr,
 	&f_acm_string_ctrl.attr,
 	&f_acm_string_data.attr,
 	&f_acm_string_iad.attr,
+	&f_acm_protocol_function_iad.attr,
+	&f_acm_protocol_interface_ctrl.attr,
+	&f_acm_protocol_interface_data.attr,
 	NULL,
 };
 
@@ -915,6 +956,9 @@ static struct usb_function_instance *acm_alloc_instance(void)
 	strcpy(opts->string_ctrl_buf, "CDC Abstract Control Model (ACM)");
 	strcpy(opts->string_data_buf, "CDC ACM Data");
 	strcpy(opts->string_iad_buf, "CDC Serial");
+	opts->proto_func_iad = USB_CDC_ACM_PROTO_AT_V25TER;
+	opts->proto_intf_ctrl = USB_CDC_ACM_PROTO_AT_V25TER;
+	opts->proto_intf_data = 0;
 
 	ret = gserial_alloc_line(&opts->port_num);
 	if (ret) {
