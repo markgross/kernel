@@ -73,6 +73,10 @@ struct f_acm {
 #define ACM_CTRL_BRK		(1 << 2)
 #define ACM_CTRL_DSR		(1 << 1)
 #define ACM_CTRL_DCD		(1 << 0)
+
+	char *string_ctrl;
+	char *string_data;
+	char *string_iad;
 };
 
 static inline struct f_acm *func_to_acm(struct usb_function *f)
@@ -281,12 +285,7 @@ static struct usb_descriptor_header *acm_ss_function[] = {
 #define ACM_IAD_IDX	2
 
 /* static strings, in UTF-8 */
-static struct usb_string acm_string_defs[] = {
-	[ACM_CTRL_IDX].s = "CDC Abstract Control Model (ACM)",
-	[ACM_DATA_IDX].s = "CDC ACM Data",
-	[ACM_IAD_IDX ].s = "CDC Serial",
-	{  } /* end of list */
-};
+static struct usb_string acm_string_defs[3];
 
 static struct usb_gadget_strings acm_string_table = {
 	.language =		0x0409,	/* en-us */
@@ -617,9 +616,9 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	int			status;
 	struct usb_ep		*ep;
 
-	/* REVISIT might want instance-specific strings to help
-	 * distinguish instances ...
-	 */
+	acm_string_defs[ACM_CTRL_IDX].s = acm->string_ctrl;
+	acm_string_defs[ACM_DATA_IDX].s = acm->string_data;
+	acm_string_defs[ACM_IAD_IDX].s = acm->string_iad;
 
 	/* maybe allocate device-global string IDs, and patch descriptors */
 	us = usb_gstrings_attach(cdev, acm_strings,
@@ -742,6 +741,12 @@ static void acm_free_func(struct usb_function *f)
 
 struct f_acm_opts {
 	struct usb_function_instance func_inst;
+#define ACM_MAX_STRING_DESC_LENGTH 64
+	char string_ctrl_buf[ACM_MAX_STRING_DESC_LENGTH];
+	char string_data_buf[ACM_MAX_STRING_DESC_LENGTH];
+	char string_iad_buf[ACM_MAX_STRING_DESC_LENGTH];
+	struct mutex lock;
+	int refcnt;
 	u8 port_num;
 };
 
@@ -767,11 +772,17 @@ static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 	acm->port.func.set_alt = acm_set_alt;
 	acm->port.func.setup = acm_setup;
 	acm->port.func.disable = acm_disable;
-
-	opts = container_of(fi, struct f_acm_opts, func_inst);
-	acm->port_num = opts->port_num;
 	acm->port.func.unbind = acm_unbind;
 	acm->port.func.free_func = acm_free_func;
+
+	opts = container_of(fi, struct f_acm_opts, func_inst);
+	mutex_lock(&opts->lock);
+	opts->refcnt++;
+	acm->port_num = opts->port_num;
+	acm->string_ctrl = opts->string_ctrl_buf;
+	acm->string_data = opts->string_data_buf;
+	acm->string_iad = opts->string_iad_buf;
+	mutex_unlock(&opts->lock);
 
 	return &acm->port.func;
 }
@@ -792,8 +803,31 @@ static ssize_t f_acm_attr_show(struct config_item *item,
 		container_of(attr, struct f_acm_opts_attribute, attr);
 	ssize_t ret = 0;
 
+	mutex_lock(&opts->lock);
 	if (f_acm_opts_attr->show)
 		ret = f_acm_opts_attr->show(opts, page);
+	mutex_unlock(&opts->lock);
+	return ret;
+}
+
+static ssize_t f_acm_attr_store(struct config_item *item,
+		struct configfs_attribute *attr, const char *page, size_t len)
+{
+	struct f_acm_opts *opts = to_f_acm_opts(item);
+	struct f_acm_opts_attribute *f_acm_opts_attr =
+		container_of(attr, struct f_acm_opts_attribute, attr);
+	ssize_t ret = 0;
+
+	mutex_lock(&opts->lock);
+	if (opts->refcnt) {
+		mutex_unlock(&opts->lock);
+		return -EBUSY;
+	}
+
+	if (f_acm_opts_attr->store)
+		ret = f_acm_opts_attr->store(opts, page, len);
+
+	mutex_unlock(&opts->lock);
 	return ret;
 }
 
@@ -807,6 +841,7 @@ static void acm_attr_release(struct config_item *item)
 static struct configfs_item_operations acm_item_ops = {
 	.release                = acm_attr_release,
 	.show_attribute		= f_acm_attr_show,
+	.store_attribute	= f_acm_attr_store,
 };
 
 static ssize_t f_acm_port_num_show(struct f_acm_opts *opts, char *page)
@@ -817,9 +852,33 @@ static ssize_t f_acm_port_num_show(struct f_acm_opts *opts, char *page)
 static struct f_acm_opts_attribute f_acm_port_num =
 	__CONFIGFS_ATTR_RO(port_num, f_acm_port_num_show);
 
+#define DESCRIPTOR_STRING_ATTR(_name, _buffer)				\
+static ssize_t								\
+f_acm_##_name##_show(struct f_acm_opts *opts, char *buf)		\
+{									\
+	return sprintf(buf, "%s", opts->_buffer);			\
+}									\
+static ssize_t								\
+f_acm_##_name##_store(struct f_acm_opts *opts, const char *buf,		\
+	size_t size)							\
+{									\
+	if (size >= sizeof(opts->_buffer))				\
+		return -EINVAL;						\
+	return strlcpy(opts->_buffer, buf, sizeof(opts->_buffer));	\
+}									\
+static struct f_acm_opts_attribute f_acm_##_name =			\
+	__CONFIGFS_ATTR(_name, S_IRUGO | S_IWUSR,			\
+			f_acm_##_name##_show, f_acm_##_name##_store);
+
+DESCRIPTOR_STRING_ATTR(string_ctrl, string_ctrl_buf)
+DESCRIPTOR_STRING_ATTR(string_data, string_data_buf)
+DESCRIPTOR_STRING_ATTR(string_iad, string_iad_buf)
 
 static struct configfs_attribute *acm_attrs[] = {
 	&f_acm_port_num.attr,
+	&f_acm_string_ctrl.attr,
+	&f_acm_string_data.attr,
+	&f_acm_string_iad.attr,
 	NULL,
 };
 
@@ -836,6 +895,9 @@ static void acm_free_instance(struct usb_function_instance *fi)
 	opts = container_of(fi, struct f_acm_opts, func_inst);
 	gserial_free_line(opts->port_num);
 	kfree(opts);
+	mutex_lock(&opts->lock);
+	opts->refcnt--;
+	mutex_unlock(&opts->lock);
 }
 
 static struct usb_function_instance *acm_alloc_instance(void)
@@ -846,12 +908,20 @@ static struct usb_function_instance *acm_alloc_instance(void)
 	opts = kzalloc(sizeof(*opts), GFP_KERNEL);
 	if (!opts)
 		return ERR_PTR(-ENOMEM);
+
 	opts->func_inst.free_func_inst = acm_free_instance;
+	mutex_init(&opts->lock);
+	/* Initialize default strings */
+	strcpy(opts->string_ctrl_buf, "CDC Abstract Control Model (ACM)");
+	strcpy(opts->string_data_buf, "CDC ACM Data");
+	strcpy(opts->string_iad_buf, "CDC Serial");
+
 	ret = gserial_alloc_line(&opts->port_num);
 	if (ret) {
 		kfree(opts);
 		return ERR_PTR(ret);
 	}
+
 	config_group_init_type_name(&opts->func_inst.group, "",
 			&acm_func_type);
 	return &opts->func_inst;
