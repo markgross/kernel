@@ -1,0 +1,18 @@
+#
+# X86 Platform Specific Drivers
+#
+
+config INTEL_SCU_REBOOT_REASON
+	tristate "osip driver for Intel MID platforms"
+	default y
+	depends on INTEL_REBOOT_TARGET && INTEL_SCU_IPC
+	help
+	  This driver squirrels away the reboot reason with the SCU.
+
+	  If unsure, say N.
+
+config INTEL_REBOOT_TARGET
+	bool "Intel Reboot Target"
+	---help---
+	  This driver provides a generic implementation for reboot target setting at
+	  reset time.
