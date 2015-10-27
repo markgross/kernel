@@ -2664,19 +2664,6 @@ static int _mmc_blk_suspend(struct mmc_card *card)
 		mmc_queue_suspend(&md->queue);
 		list_for_each_entry(part_md, &md->part, part) {
 			mmc_queue_suspend(&part_md->queue);
-			if (part_md->part_type ==
-				EXT_CSD_PART_CONFIG_ACC_RPMB) {
-				/*
-				 * RPMB partition is accessed by API directly.
-				 * Driver need to set a flag when suspending
-				 * MMC block device to notify API that the
-				 * accessing of RPMB partition needs to be
-				 * stopped
-				 */
-				mmc_claim_host(card->host);
-				part_md->flags |= MMC_BLK_SUSPENDED;
-				mmc_release_host(card->host);
-			}
 		}
 	}
 	return 0;

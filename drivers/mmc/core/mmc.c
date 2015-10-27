@@ -1724,6 +1724,7 @@ out:
 	return err;
 }
 
+#if 0
 /*
  * Shutdown callback
  */
@@ -1744,6 +1745,7 @@ static int mmc_shutdown(struct mmc_host *host)
 
 	return err;
 }
+#endif
 
 /*
  * Callback for resume.
@@ -1858,7 +1860,9 @@ static const struct mmc_bus_ops mmc_ops = {
 	.runtime_resume = mmc_runtime_resume,
 	.power_restore = mmc_power_restore,
 	.alive = mmc_alive,
+#if 0
 	.shutdown = mmc_shutdown,
+#endif
 	.reset = mmc_reset,
 };
 
