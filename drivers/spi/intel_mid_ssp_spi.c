@@ -1226,7 +1226,7 @@ static void pump_messages(struct work_struct *work)
 static int setup(struct spi_device *spi)
 {
 	struct intel_mid_ssp_spi_chip *chip_info = NULL;
-	struct chip_data *chip;
+	struct chip_data *chip, *alloc_chip = NULL;
 	struct ssp_drv_context *sspc =
 		spi_master_get_devdata(spi->master);
 	u32 tx_fifo_threshold;
@@ -1234,6 +1234,7 @@ static int setup(struct spi_device *spi)
 	u32 clk_div;
 	static u32 one_time_setup = 1;
 	unsigned long flags;
+	int ret = 0;
 
 	spin_lock_irqsave(&sspc->lock, flags);
 	if (!spi->bits_per_word)
@@ -1243,19 +1244,29 @@ static int setup(struct spi_device *spi)
 		&& (spi->bits_per_word != 32)) {
 		spin_unlock_irqrestore(&sspc->lock, flags);
 		dev_warn(&spi->dev, "invalid wordsize, system only support 8,16,32 bits per word.\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto exit_setup;
 	}
 
 	chip = spi_get_ctldata(spi);
 	if (!chip) {
-		chip = kzalloc(sizeof(struct chip_data), GFP_KERNEL);
+		spin_unlock_irqrestore(&sspc->lock, flags);
+		alloc_chip = chip = kzalloc(sizeof(struct chip_data), GFP_KERNEL);
+		spin_lock_irqsave(&sspc->lock, flags);
 		if (!chip) {
 			dev_err(&spi->dev,
 			"failed setup: can't allocate chip data\n");
-			spin_unlock_irqrestore(&sspc->lock, flags);
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto exit_setup;
+		}
+
+		if (spi_get_ctldata(spi)) {
+			dev_err(&spi->dev, "failed setup: already executed\n");
+			ret = -EAGAIN;
+			goto exit_setup;
 		}
 	}
+
 	chip->cr0 = SSCR0_Motorola | SSCR0_DataSize(spi->bits_per_word > 16 ?
 		spi->bits_per_word - 16 : spi->bits_per_word)
 			| SSCR0_SSE
@@ -1274,15 +1285,15 @@ static int setup(struct spi_device *spi)
 			if (sspc->cur_msg) {
 				dev_err(&spi->dev, "message pending... Failing\n");
 				/* A message is currently in transfer. Do not toggle CS */
-				spin_unlock_irqrestore(&sspc->lock, flags);
-				return -EAGAIN;
+				ret = -EAGAIN;
+				goto exit_setup;
 			}
 			if (!chip_info->cs_control) {
 				/* unable to control cs by hand */
 				dev_err(&spi->dev,
 						"This CS does not support SPI_CS_HIGH flag\n");
-				spin_unlock_irqrestore(&sspc->lock, flags);
-				return -EINVAL;
+				ret = -EINVAL;
+				goto exit_setup;
 			}
 			sspc->cs_assert = spi->mode & SPI_CS_HIGH;
 			chip_info->cs_control(!sspc->cs_assert);
@@ -1359,8 +1370,8 @@ static int setup(struct spi_device *spi)
 		chip->n_bytes = 4;
 	} else {
 		dev_err(&spi->dev, "invalid wordsize\n");
-		spin_unlock_irqrestore(&sspc->lock, flags);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto exit_setup;
 	}
 
 	if ((sspc->quirks & QUIRKS_SPI_SLAVE_CLOCK_MODE) == 0) {
@@ -1374,6 +1385,7 @@ static int setup(struct spi_device *spi)
 	chip->bits_per_word = spi->bits_per_word;
 	chip->chip_select = spi->chip_select;
 
+	alloc_chip = NULL;
 	spi_set_ctldata(spi, chip);
 
 	/* setup of sspc members that will not change across transfers */
@@ -1393,8 +1405,12 @@ static int setup(struct spi_device *spi)
 	}
 	sspc->clear_sr = SSSR_TUR | SSSR_ROR | SSSR_TINT;
 
+exit_setup:
+	if (alloc_chip)
+		kfree(alloc_chip);
+
 	spin_unlock_irqrestore(&sspc->lock, flags);
-	return 0;
+	return ret;
 }
 
 /**
