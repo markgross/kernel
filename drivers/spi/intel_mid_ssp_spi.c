@@ -1610,7 +1610,6 @@ static int intel_mid_ssp_spi_probe(struct pci_dev *pdev,
 	pm_runtime_set_autosuspend_delay(&pdev->dev, 25);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_set_active(&pdev->dev);
-	pm_runtime_enable(&pdev->dev);
 	if (!pm_runtime_enabled(&pdev->dev))
 		dev_err(&pdev->dev, "spi runtime pm not enabled!\n");
 	pm_runtime_put_noidle(&pdev->dev);
