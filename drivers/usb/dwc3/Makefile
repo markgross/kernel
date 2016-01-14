@@ -18,7 +18,6 @@ endif
 ifneq ($(CONFIG_DEBUG_FS),)
 	dwc3-y				+= debugfs.o
 endif
-endif
 
 ##
 # Platform-specific glue layers go here

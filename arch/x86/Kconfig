@@ -483,7 +483,6 @@ config X86_INTEL_MID
 	select SFI
 	select I2C
 	select INTEL_SCU_IPC
-	select X86_PLATFORM_DEVICES
 	select ARCH_HAVE_CUSTOM_GPIO_H
 	select DW_APB_TIMER
 	select APB_TIMER
@@ -541,8 +540,6 @@ config INTEL_DEBUG_FEATURE
 	 enabling of the debug features depends on the mode
 	 the device is in (e.g. manufacturing, production,
 	 end user, etc...).
-
-endif
 
 config X86_INTEL_LPSS
 	bool "Intel Low Power Subsystem Support"
