@@ -150,20 +150,12 @@ void read_persistent_clock(struct timespec *ts)
 static int handle_mrfl_dev_ioapic(int irq)
 {
 	int ret = 0;
-	int ioapic;
-	struct io_apic_irq_attr irq_attr;
+	int polarity = 0; /*Active high */
 
-	ioapic = mp_find_ioapic(irq);
-	if (ioapic >= 0) {
-		irq_attr.ioapic = ioapic;
-		irq_attr.ioapic_pin = irq;
-		irq_attr.trigger = 1;
-		irq_attr.polarity = 0; /* Active high */
-		io_apic_set_pci_routing(NULL, irq, &irq_attr);
-	} else {
-		pr_warn("can not find interrupt %d in ioapic\n", irq);
-		ret = -EINVAL;
-	}
+	ret = mp_set_gsi_attr(irq, 1, polarity, NUMA_NO_NODE);
+	if (ret == 0)
+		ret = mp_map_gsi_to_irq(irq, IOAPIC_MAP_ALLOC);
+	WARN_ON(ret < 0);
 
 	return ret;
 }
@@ -211,18 +203,16 @@ static __init int add_rtc_cmos(void)
 	if (of_have_populated_dt())
 		return 0;
 
-	/* Intel MID platforms don't have ioport rtc */
-	if (mrst_identify_cpu())
 	/* Intel MID platforms don't have ioport rtc
 	 * except Tangier platform, which doesn't have vRTC
 	 */
-	if (intel_mid_identify_cpu() &&
-	    intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER)
-		return -ENODEV;
-
-	ret = handle_mrfl_dev_ioapic(RTC_IRQ);
-	if (ret)
-		return ret;
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) {
+		ret = handle_mrfl_dev_ioapic(RTC_IRQ);
+		if (ret) {
+			pr_warn("Error adding Merrifield device ioapic for RTC\n");
+			return ret;
+		}
+	}
 
 	platform_device_register(&rtc_device);
 	dev_info(&rtc_device.dev,
