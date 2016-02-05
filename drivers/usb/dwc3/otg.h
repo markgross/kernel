@@ -331,6 +331,8 @@ struct dwc_otg2 {
 	/** User space ID switch event */
 #define USER_ID_A_CHANGE_EVENT 0x01
 #define USER_ID_B_CHANGE_EVENT 0x02
+	/** a_bus_drop event from userspace */
+#define USER_A_BUS_DROP 0x40
 
 	/* States */
 	enum dwc_otg_state prev;
@@ -413,6 +415,13 @@ struct dwc3_otg_hw_ops {
 	int (*suspend)(struct dwc_otg2 *otg);
 	int (*resume)(struct dwc_otg2 *otg);
 };
+
+#define OTG_USB2_100MA                          0xfff1
+#define OTG_USB3_150MA                          0xfff2
+#define OTG_USB2_500MA                          0xfff3
+#define OTG_USB3_900MA                          0xfff4
+#define OTG_DEVICE_SUSPEND                      0xfffe
+#define OTG_DEVICE_RESUME                       0xffff
 
 void dwc3_wakeup_otg_thread(struct dwc_otg2 *otg);
 struct dwc_otg2 *dwc3_get_otg(void);

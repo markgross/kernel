@@ -810,16 +810,6 @@ struct dwc3 {
 #define DWC3_REVISION_270A	0x5533270a
 #define DWC3_REVISION_280A	0x5533280a
 
-	unsigned		is_selfpowered:1;
-	unsigned		three_stage_setup:1;
-	unsigned		ep0_bounced:1;
-	unsigned		ep0_expect_in:1;
-	unsigned		start_config_issued:1;
-	unsigned		setup_packet_pending:1;
-	unsigned		delayed_status:1;
-	unsigned		needs_fifo_resize:1;
-	unsigned		resize_fifos:1;
-	unsigned		pullups_connected:1;
 	unsigned		quirks_disable_irqthread:1;
 
 	enum dwc3_ep0_next	ep0_next_event;

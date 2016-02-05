@@ -21,6 +21,7 @@
 #include <linux/cpuidle.h>
 #include <linux/proc_fs.h>
 #include <asm/intel_mid_rpmsg.h>
+#include <asm/mwait.h>
 
 #ifdef CONFIG_DRM_INTEL_MID
 #define GFX_ENABLE

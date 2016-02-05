@@ -179,8 +179,10 @@ static int mid_pb_remove(struct platform_device *pdev)
 {
 	struct mid_pb_priv *priv = platform_get_drvdata(pdev);
 
-	free_irq(irq, input);
-	input_unregister_device(input);
+	iounmap(priv->pb_stat);
+	free_irq(priv->irq, priv);
+	platform_set_drvdata(pdev, NULL);
+	input_unregister_device(priv->input);
 	kfree(priv);
 
 	return 0;

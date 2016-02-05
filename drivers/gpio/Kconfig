@@ -902,6 +902,13 @@ config GPIO_INTEL_MID
 	help
 	  Say Y here to support Intel Mid GPIO.
 
+config GPIO_LANGWELL
+	bool "Intel Langwell/Penwell GPIO support"
+	depends on PCI && X86
+	select IRQ_DOMAIN
+	help
+	  Say Y here to support Intel Langwell/Penwell GPIO.
+
 config GPIO_ML_IOH
 	tristate "OKI SEMICONDUCTOR ML7213 IOH GPIO support"
 	depends on PCI

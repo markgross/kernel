@@ -44,20 +44,6 @@ static struct intel_dwc_otg_pdata *get_otg_platform_data(struct pci_dev *pdev)
 			dwc_otg_get_usbspecoverride();
 
 		return &dwc_otg_pdata;
-	case PCI_DEVICE_ID_INTEL_BYT_OTG:
-		/* FIXME: Hardcode now, but need to use ACPI table for GPIO */
-		if (INTEL_MID_BOARD(3, TABLET, BYT, BLK, PRO, RVP3) ||
-			INTEL_MID_BOARD(3, TABLET, BYT, BLK, ENG, RVP3)) {
-			pr_info("This is BYT RVP\n");
-			dwc_otg_pdata.gpio_cs = 156;
-			dwc_otg_pdata.gpio_reset = 144;
-		} else if (INTEL_MID_BOARD(3, TABLET, BYT, BLK, PRO, 8PR0) ||
-			INTEL_MID_BOARD(3, TABLET, BYT, BLK, ENG, 8PR0)) {
-			pr_info("This is BYT FFRD8 PR0\n");
-			dwc_otg_pdata.gpio_cs = 54;
-			dwc_otg_pdata.gpio_reset = 144;
-		}
-		return &dwc_otg_pdata;
 	default:
 		break;
 	}
@@ -103,11 +89,5 @@ static void otg_pci_early_quirks(struct pci_dev *pci_dev)
 	pci_dev->dev.platform_data = get_otg_platform_data(pci_dev);
 }
 
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_MFD_OTG,
-			otg_pci_early_quirks);
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_CLV_OTG,
-			otg_pci_early_quirks);
 DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_MRFL_DWC3_OTG,
-			otg_pci_early_quirks);
-DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_INTEL, PCI_DEVICE_ID_INTEL_BYT_OTG,
 			otg_pci_early_quirks);

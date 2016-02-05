@@ -323,7 +323,7 @@ static int get_id(struct dwc_otg2 *otg)
 }
 
 static int dwc_otg_notify_charger_type(struct dwc_otg2 *otg,
-		enum usb_charger_state state)
+		enum power_supply_charger_event event)
 {
 	if (dwc3_otg_pdata->notify_charger_type)
 		return dwc3_otg_pdata->notify_charger_type(otg, event);
@@ -388,15 +388,8 @@ static enum dwc_otg_state do_wait_vbus_raise(struct dwc_otg2 *otg)
 	}
 
 	/* timeout*/
-	if (!ret) {
-		if (is_self_powered_b_device(otg)) {
-			spin_lock_irqsave(&otg->lock, flags);
-			otg->charging_cap.chrg_type = B_DEVICE;
-			spin_unlock_irqrestore(&otg->lock, flags);
-
-			return DWC_STATE_A_HOST;
-		}
-	}
+	if (!ret)
+		return DWC_STATE_A_HOST;
 
 	return DWC_STATE_B_IDLE;
 }
@@ -537,12 +530,13 @@ static enum dwc_otg_state do_charger_detection(struct dwc_otg2 *otg)
 	case POWER_SUPPLY_CHARGER_TYPE_ACA_DOCK:
 	case POWER_SUPPLY_CHARGER_TYPE_USB_DCP:
 	case POWER_SUPPLY_CHARGER_TYPE_USB_CDP:
-	case POWER_SUPPLY_CHARGER_TYPE_USB_SDP:
 	case POWER_SUPPLY_CHARGER_TYPE_SE1:
 		if (dwc_otg_notify_charger_type(otg,
 					POWER_SUPPLY_CHARGER_EVENT_CONNECT) < 0)
 			otg_err(otg, "Notify battery type failed!\n");
 		break;
+	case POWER_SUPPLY_CHARGER_TYPE_USB_SDP:
+	/* SDP is complicate, it will be handle in set_power */
 	default:
 		break;
 	}
@@ -638,12 +632,11 @@ static enum dwc_otg_state do_a_host(struct dwc_otg2 *otg)
 stay_host:
 	otg_events = 0;
 	user_events = 0;
-	otg_mask = 0;
-	user_mask = 0;
 
+	user_mask = USER_A_BUS_DROP |
+				USER_ID_B_CHANGE_EVENT;
 	otg_mask = OEVT_CONN_ID_STS_CHNG_EVNT |
 			OEVT_A_DEV_SESS_END_DET_EVNT;
-	user_mask =	USER_ID_B_CHANGE_EVENT;
 
 	rc = sleep_until_event(otg,
 			otg_mask, user_mask,
@@ -665,6 +658,19 @@ stay_host:
 		else
 			dwc_otg_enable_vbus(otg, 0);
 
+		stop_host(otg);
+		return DWC_STATE_B_IDLE;
+	}
+
+	if (user_events & USER_A_BUS_DROP) {
+		/* Due to big consume by DUT, even ACA-Dock connected,
+		 * the battery capability still maybe decrease. For this
+		 * case, still save host mode. Because DUT haven't drive VBus.*/
+		if (otg->charging_cap.chrg_type ==
+				POWER_SUPPLY_CHARGER_TYPE_ACA_DOCK)
+			goto stay_host;
+
+		dwc_otg_enable_vbus(otg, 0);
 		stop_host(otg);
 		return DWC_STATE_B_IDLE;
 	}
@@ -1082,7 +1088,8 @@ static struct dwc_otg2 *dwc3_otg_alloc(struct device *dev)
 	otg->otg_data = dev->platform_data;
 
 	usb_phy = &otg->usb2_phy;
-	otg->otg.phy = usb_phy;
+	// This is wrong! Non-compatible pointers struct phy is not struct usb_phy
+	// otg->otg.phy = usb_phy;
 	otg->usb2_phy.otg = &otg->otg;
 
 	otg->dev		= dev;
@@ -1422,6 +1429,10 @@ static const struct dev_pm_ops dwc_usb_otg_pm_ops = {
 
 static DEFINE_PCI_DEVICE_TABLE(pci_ids) = {
 	{ PCI_DEVICE_CLASS(((PCI_CLASS_SERIAL_USB << 8) | 0x20), ~0),
+		.vendor = PCI_VENDOR_ID_INTEL,
+		.device = PCI_DEVICE_ID_DWC,
+	},
+	{ PCI_DEVICE_CLASS(((PCI_CLASS_SERIAL_USB << 8) | 0x80), ~0),
 		.vendor = PCI_VENDOR_ID_INTEL,
 		.device = PCI_DEVICE_ID_DWC,
 	},

@@ -35,6 +35,7 @@ enum iio_chan_type {
 	IIO_ENERGY,
 	IIO_DISTANCE,
 	IIO_VELOCITY,
+	IIO_RESISTANCE,
 };
 
 enum iio_modifier {

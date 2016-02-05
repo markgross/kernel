@@ -14,6 +14,7 @@
 #include <linux/cdev.h>
 #include <linux/iio/types.h>
 #include <linux/of.h>
+#include <linux/iio/consumer.h>
 /* IIO TODO LIST */
 /*
  * Provide means of adjusting timer accuracy.

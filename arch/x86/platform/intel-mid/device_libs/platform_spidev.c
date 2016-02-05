@@ -43,7 +43,8 @@ static void tng_ssp_spi_platform_pinmux(void)
 	/* Request Chip Select gpios */
 	saved_muxing = gpio_get_alt(tng_ssp_spi2_FS_gpio);
 
-	lnw_gpio_set_alt(tng_ssp_spi2_FS_gpio, LNW_GPIO);
+	/* Not supported in upstream intel mid transition from lnw_* */
+	/* lnw_gpio_set_alt(tng_ssp_spi2_FS_gpio, LNW_GPIO); */
 	err = gpio_request_one(tng_ssp_spi2_FS_gpio,
 			GPIOF_DIR_OUT|GPIOF_INIT_HIGH, "Arduino Shield SS");
 	if (err) {

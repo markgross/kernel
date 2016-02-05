@@ -59,6 +59,17 @@ enum GPIO_REG {
 	GFER,		/* falling edge detect */
 	GEDR,		/* edge detect result */
 	GAFR,		/* alt function */
+	GFBR = 9,       /* glitch filter bypas */
+	GPIT,           /* interrupt type */
+	GPIP = GFER,    /* level interrupt polarity */
+	GPIM = GRER,    /* level interrupt mask */
+
+	/* the following registers only exist on MRFLD */
+	GFBR_TNG = 6,
+	GIMR,           /* interrupt mask */
+	GISR,           /* interrupt source */
+	GITR = 32,      /* interrupt type */
+	GLPR = 33,      /* level-input polarity */
 };
 
 /* intel_mid gpio driver data */

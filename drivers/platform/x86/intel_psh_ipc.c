@@ -531,9 +531,6 @@ static int psh_ipc_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	case INTEL_MID_CPU_CHIP_TANGIER:
 		ipc_ctrl.reg_map = 1;
 		break;
-	case INTEL_MID_CPU_CHIP_ANNIEDALE:
-		ipc_ctrl.reg_map = 1;
-		break;
 	default:
 		dev_err(&pdev->dev, "error register map\n");
 		ret = -EINVAL;

@@ -13,6 +13,12 @@
 /* For every CPU addition a new get_<cpuname>_ops interface needs
  * to be added.
  */
+extern void *get_tangier_ops(void);
+
+/* Disabling these CPU ops extern since neither is currently
+ * supported as pnwl.c/clv.c files for intel-mid devices
+ */
+/*
 extern void *get_penwell_ops(void);
 extern void *get_cloverview_ops(void);
-extern void *get_tangier_ops(void);
+*/

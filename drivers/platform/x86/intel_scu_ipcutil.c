@@ -807,7 +807,7 @@ static long scu_ipc_ioctl(struct file *fp, unsigned int cmd,
 int intel_scu_ipc_get_oshob_base(void)
 {
 	if (oshob_info == NULL)
-		return NULL;
+		return 0;
 
 	return oshob_info->oshob_base;
 }
@@ -1583,6 +1583,7 @@ int intel_scu_ipc_read_oshob_info(void)
 		ret = intel_scu_ipc_read_oshob_def_param(oshob_addr);
 
 		if (oshob_info->platform_type == INTEL_MID_CPU_CHIP_TANGIER) {
+			pr_debug("(default oshob) SCU buffer size is %d bytes\n",
 				OSHOB_SCU_BUF_MRFLD_DW_SIZE*4);
 		} else {
 			pr_debug("(default oshob) SCU buffer size is %d bytes\n",
@@ -1944,7 +1945,7 @@ u32 intel_scu_ipc_get_fabricerror_buf1_offset(void)
 
 	if (oshob_info->platform_type == INTEL_MID_CPU_CHIP_CLOVERVIEW)
 		return offsetof(struct scu_ipc_oshob_extend, fabricerrlog1);
-	else if (oshob_info->platform_type == INTEL_MID_CPU_CHIP_TANGIER)
+	else if (oshob_info->platform_type == INTEL_MID_CPU_CHIP_TANGIER) {
 		if ((oshob_info->oshob_majrev >= 1) &&
 		    (oshob_info->oshob_minrev >= 4)) {
 			return offsetof(struct scu_ipc_oshob_extend_v14,
@@ -1953,7 +1954,11 @@ u32 intel_scu_ipc_get_fabricerror_buf1_offset(void)
 			return offsetof(struct scu_ipc_oshob,
 					fab_err_log) + oshob_info->offs_add;
 		}
-		return 0;
+	} else {
+		pr_err("scu_ipc_get_fabricerror_buf_offset: platform not recognized!\n");
+                return 0;
+	}
+
 }
 
 /*

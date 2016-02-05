@@ -21,9 +21,22 @@
 #define __DWC3_INTEL_H
 
 #include "otg.h"
+enum intel_mid_pmic_type {
+	NO_PMIC,
+	SHADY_COVE,
+	BASIN_COVE
+};
+
 
 struct intel_dwc_otg_pdata {
 	int is_hvp;
+	enum intel_mid_pmic_type pmic_type;
+	int charger_detect_enable;
+	int gpio_cs;
+	int gpio_reset;
+	int gpio_id;
+	int id;
+	int charging_compliance;
 };
 
 #define TUSB1211_VENDOR_ID_LO					0x00
@@ -155,7 +168,7 @@ struct intel_dwc_otg_pdata {
 #define USBIDCTRL_USB_IDEN_D0	(1 << 0)
 #define PMIC_USBIDSTS				0x1A
 #define USBIDSTS_ID_GND			(1 << 0)
-#define USBIDSTS_ID_RARBRC_STS(v)	((v & 0x3)  << 0)
+#define USBIDSTS_ID_RARBRC_STS(v)	((v & 0x3)  << 1)
 #define USBIDSTS_ID_FLOAT_STS	(1 << 3)
 #define PMIC_USBPHYCTRL_D0		(1 << 0)
 #define APBFC_EXIOTG3_MISC0_REG			0xF90FF85C
@@ -164,4 +177,12 @@ struct intel_dwc_otg_pdata {
 #define DATACON_INTERVAL	10
 #define VBUS_TIMEOUT	300
 #define PCI_DEVICE_ID_DWC 0x119E
+
+#define VENDOR_ID_MASK (0x03 << 6)
+#define BASIN_COVE_PMIC_ID (0x03 << 6)
+
+#define PMIC_MAJOR_REV (0x07 << 3)
+#define PMIC_A0_MAJOR_REV 0x00
+
+
 #endif /* __DWC3_INTEL_H */

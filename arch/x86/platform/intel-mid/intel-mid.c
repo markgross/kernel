@@ -11,6 +11,7 @@
  * of the License.
  */
 
+#define        SFI_SIG_OEM0    "OEM0"
 #define pr_fmt(fmt) "intel_mid: " fmt
 
 #include <linux/init.h>

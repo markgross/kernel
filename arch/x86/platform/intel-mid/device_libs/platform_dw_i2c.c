@@ -66,6 +66,7 @@ int intel_mid_dw_i2c_abort(int busnum)
 			busnum, pins->scl_gpio, pins->sda_gpio);
 	gpio_request(pins->scl_gpio, "scl");
 	gpio_request(pins->sda_gpio, "sda");
+	/* Not supported in upstream intel mid transition from lnw_* */
 	lnw_gpio_set_alt(pins->scl_gpio, LNW_GPIO);
 	lnw_gpio_set_alt(pins->sda_gpio, LNW_GPIO);
 	gpio_direction_input(pins->scl_gpio);
@@ -102,6 +103,7 @@ int intel_mid_dw_i2c_abort(int busnum)
 	gpio_set_value(pins->scl_gpio, 1);
 	usleep_range(10, 20);
 	gpio_set_value(pins->sda_gpio, 0);
+	/* Not supported in upstream intel mid transition from lnw_* */
 	lnw_gpio_set_alt(pins->scl_gpio, pins->scl_alt);
 	lnw_gpio_set_alt(pins->sda_gpio, pins->sda_alt);
 	usleep_range(10, 10);

@@ -2529,7 +2529,7 @@ void mmc_start_host(struct mmc_host *host)
 	mmc_gpiod_request_cd_irq(host);
 	_mmc_detect_change(host, 0, false);
 	if (host->caps2 & MMC_CAP2_INIT_CARD_SYNC)
-		flush_work_sync(&host->detect.work);
+		flush_work(&host->detect.work);
 }
 
 void mmc_stop_host(struct mmc_host *host)
@@ -2640,6 +2640,56 @@ int mmc_flush_cache(struct mmc_card *card)
 EXPORT_SYMBOL(mmc_flush_cache);
 
 #ifdef CONFIG_PM
+
+/**
+ *      mmc_suspend_host - suspend a host
+ *      @host: mmc host
+ */
+int mmc_suspend_host(struct mmc_host *host)
+{
+        int err = 0;
+
+        cancel_delayed_work(&host->detect);
+        mmc_flush_scheduled_work();
+
+        mmc_bus_get(host);
+        if (host->bus_ops && !host->bus_dead) {
+                if (host->bus_ops->suspend) {
+                        if (mmc_card_doing_bkops(host->card)) {
+                                err = mmc_stop_bkops(host->card);
+                                if (err)
+                                        goto out;
+                        }
+                        err = host->bus_ops->suspend(host);
+                }
+
+                if (err == -ENOSYS || !host->bus_ops->resume) {
+                        /*
+                         * We simply "remove" the card in this case.
+                         * It will be redetected on resume.  (Calling
+                         * bus_ops->remove() with a claimed host can
+                         * deadlock.)
+                         */
+                        if (host->bus_ops->remove)
+                                host->bus_ops->remove(host);
+                        mmc_claim_host(host);
+                        mmc_detach_bus(host);
+                        mmc_power_off(host);
+                        mmc_release_host(host);
+                        host->pm_flags = 0;
+                        err = 0;
+                }
+        }
+        mmc_bus_put(host);
+
+        if (!err && !mmc_card_keep_power(host))
+                mmc_power_off(host);
+
+out:
+        return err;
+}
+
+EXPORT_SYMBOL(mmc_suspend_host);
 
 /* Do the card removal on suspend if card is assumed removeable
  * Do that in pm notifier while userspace isn't yet frozen, so we will be able

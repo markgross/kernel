@@ -887,16 +887,6 @@ static ssize_t cancel_update_store(struct kobject *kobj,
 	return size;
 }
 
-#define __BIN_ATTR(_name, _mode, _size, _read, _write) { \
-	.attr = {.name = __stringify(_name), .mode = _mode },	\
-	.size	= _size,					\
-	.read	= _read,					\
-	.write	= _write,					\
-}
-
-#define BIN_ATTR(_name, _mode, _size, _read, _write) \
-struct bin_attribute bin_attr_##_name =	\
-	__BIN_ATTR(_name, _mode, _size, _read, _write)
 
 #define KOBJ_FW_UPDATE_ATTR(_name, _mode, _show, _store) \
 	struct kobj_attribute _name##_attr = __ATTR(_name, _mode, _show, _store)
@@ -904,8 +894,8 @@ struct bin_attribute bin_attr_##_name =	\
 static KOBJ_FW_UPDATE_ATTR(cancel_update, S_IWUSR, NULL, cancel_update_store);
 static KOBJ_FW_UPDATE_ATTR(fw_version, S_IRUGO, fw_version_show, NULL);
 static KOBJ_FW_UPDATE_ATTR(last_error, S_IRUGO, last_error_show, NULL);
-static BIN_ATTR(dnx, S_IWUSR, DNX_MAX_SIZE, NULL, write_dnx);
-static BIN_ATTR(ifwi, S_IWUSR, IFWI_MAX_SIZE, NULL, write_ifwi);
+static BIN_ATTR(dnx, S_IWUSR, write_dnx, NULL, DNX_MAX_SIZE);
+static BIN_ATTR(ifwi, S_IWUSR, write_ifwi, NULL, IFWI_MAX_SIZE);
 
 static struct attribute *fw_update_attrs[] = {
 	&cancel_update_attr.attr,

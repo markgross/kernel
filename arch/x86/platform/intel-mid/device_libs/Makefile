@@ -38,11 +38,6 @@ ifndef CONFIG_ACPI
 obj-$(subst m,y,$(CONFIG_BCM_BT_LPM)) += platform_btlpm.o
 endif
 #I2C Devices
-ifdef CONFIG_BATTERY_MAX17042
-obj-$(subst m,y,$(CONFIG_BATTERY_MAX17042)) += platform_max17042.o
-else
-obj-$(subst m,y,$(CONFIG_BATTERY_MAX17050)) += platform_max17042.o
-endif
 # Panel Control Device
 obj-$(subst m,y,$(CONFIG_DRM_MRFLD)) += platform_panel.o
 # GPS
@@ -52,5 +47,3 @@ obj-$(subst m,y,$(CONFIG_WIFI_PLATFORM_DATA)) += platform_wifi.o
 obj-$(subst m,y,$(CONFIG_MMC_SDHCI_ACPI)) += platform_sdio_regulator.o
 # SCU log
 obj-$(subst m,y,$(CONFIG_SCU_LOGGING)) += platform_scu_log.o
-# Display Control Device
-obj-y += platform_display.o

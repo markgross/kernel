@@ -1316,8 +1316,9 @@ static int lnw_gpio_probe(struct pci_dev *pdev,
 	lnw->chip.request = lnw_gpio_request;
 	lnw->chip.direction_input = lnw_gpio_direction_input;
 	lnw->chip.direction_output = lnw_gpio_direction_output;
-	lnw->chip.set_pinmux = lnw_gpio_set_alt;
-	lnw->chip.get_pinmux = gpio_get_alt;
+	/* Not available in 4.x kernels */
+	/* lnw->chip.set_pinmux = lnw_gpio_set_alt; */
+	/* lnw->chip.get_pinmux = gpio_get_alt; */
 	lnw->chip.get = lnw_gpio_get;
 	lnw->chip.set = lnw_gpio_set;
 	lnw->chip.to_irq = lnw_gpio_to_irq;
@@ -1449,10 +1450,7 @@ err_kmalloc:
 static int wp_gpio_remove(struct platform_device *pdev)
 {
 	struct lnw_gpio *lnw = platform_get_drvdata(pdev);
-	int err;
-	err = gpiochip_remove(&lnw->chip);
-	if (err)
-		dev_err(&pdev->dev, "failed to remove gpio_chip.\n");
+	gpiochip_remove(&lnw->chip);
 	iounmap(lnw->reg_base);
 	kfree(lnw);
 	platform_set_drvdata(pdev, NULL);

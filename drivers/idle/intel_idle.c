@@ -61,6 +61,7 @@
 #include <linux/notifier.h>
 #include <linux/cpu.h>
 #include <linux/module.h>
+#include <linux/intel_mid_pm.h>
 #include <asm/cpu_device_id.h>
 #include <asm/mwait.h>
 #include <asm/msr.h>
@@ -652,42 +653,42 @@ static struct cpuidle_state vlv_cstates[CPUIDLE_STATE_MAX] = {
 	{ /* MWAIT C1 */
 		.name = "C1-ATM",
 		.desc = "MWAIT 0x00",
-		.flags = MWAIT2flg(0x00) | CPUIDLE_FLAG_TIME_VALID,
+		.flags = MWAIT2flg(0x00),
 		.exit_latency = 1,
 		.target_residency = 4,
 		.enter = &intel_idle },
 	{ /* MWAIT C4 */
 		.name = "C4-ATM",
 		.desc = "MWAIT 0x30",
-		.flags = MWAIT2flg(0x30) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x30) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 100,
 		.target_residency = 400,
 		.enter = &intel_idle },
 	{ /* MWAIT C6 */
 		.name = "C6-ATM",
 		.desc = "MWAIT 0x52",
-		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 140,
 		.target_residency = 560,
 		.enter = &intel_idle },
 	{ /* MWAIT C7-S0i1 */
 		.name = "S0i1-ATM",
 		.desc = "MWAIT 0x60",
-		.flags = MWAIT2flg(0x60) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x60) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 1200,
 		.target_residency = 4000,
 		.enter = &intel_idle },
 	{ /* MWAIT C8-S0i2 */
 		.name = "S0i2-ATM",
 		.desc = "MWAIT 0x62",
-		.flags = MWAIT2flg(0x62) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x62) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 2000,
 		.target_residency = 8000,
 		.enter = &intel_idle },
 	{ /* MWAIT C9-S0i3 */
 		.name = "S0i3-ATM",
 		.desc = "MWAIT 0x64",
-		.flags = MWAIT2flg(0x64) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x64) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 10000,
 		.target_residency = 20000,
 		.enter = &intel_idle },
@@ -700,35 +701,35 @@ static struct cpuidle_state mrfld_cstates[CPUIDLE_STATE_MAX] = {
 	{ /* MWAIT C1 */
 		.name = "C1-ATM",
 		.desc = "MWAIT 0x00",
-		.flags = MWAIT2flg(0x00) | CPUIDLE_FLAG_TIME_VALID,
+		.flags = MWAIT2flg(0x00),
 		.exit_latency = 1,
 		.target_residency = 4,
 		.enter = &intel_idle },
 	{ /* MWAIT C4 */
 		.name = "C4-ATM",
 		.desc = "MWAIT 0x30",
-		.flags = MWAIT2flg(0x30) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x30) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 100,
 		.target_residency = 400,
 		.enter = &intel_idle },
 	{ /* MWAIT C6 */
 		.name = "C6-ATM",
 		.desc = "MWAIT 0x52",
-		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x52) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 140,
 		.target_residency = 560,
 		.enter = &intel_idle },
 	{ /* MWAIT C7-S0i1 */
 		.name = "S0i1-ATM",
 		.desc = "MWAIT 0x60",
-		.flags = MWAIT2flg(0x60) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x60) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 1200,
 		.target_residency = 4000,
 		.enter = &intel_idle },
 	{ /* MWAIT C9-S0i3 */
 		.name = "S0i3-ATM",
 		.desc = "MWAIT 0x64",
-		.flags = MWAIT2flg(0x64) | CPUIDLE_FLAG_TIME_VALID | CPUIDLE_FLAG_TLB_FLUSHED,
+		.flags = MWAIT2flg(0x64) | CPUIDLE_FLAG_TLB_FLUSHED,
 		.exit_latency = 10000,
 		.target_residency = 20000,
 		.enter = &intel_idle },
@@ -1139,6 +1140,10 @@ static const struct idle_cpu idle_cpu_bdw = {
 static const struct idle_cpu idle_cpu_avn = {
 	.state_table = avn_cstates,
 	.disable_promotion_to_c1e = true,
+};
+
+static const struct idle_cpu idle_cpu_mrfld = {
+	.state_table = mrfld_cstates,
 };
 
 #define ICPU(model, cpu) \

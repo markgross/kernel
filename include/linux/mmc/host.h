@@ -78,6 +78,19 @@ struct mmc_ios {
 #define MMC_SET_DRIVER_TYPE_D	3
 };
 
+struct mmc_panic_host;
+
+struct mmc_host_panic_ops {
+	void    (*request)(struct mmc_panic_host *, struct mmc_request *);
+	int    (*prepare)(struct mmc_panic_host *);
+	int     (*setup)(struct mmc_panic_host *);
+	void    (*set_ios)(struct mmc_panic_host *);
+	void    (*dumpregs)(struct mmc_panic_host *);
+	int     (*power_on)(struct mmc_panic_host *);
+	int     (*hold_mutex)(struct mmc_panic_host *);
+	void    (*release_mutex)(struct mmc_panic_host *);
+};
+
 struct mmc_host_ops {
 	/*
 	 * It is optional for the host to implement pre_req and post_req in
@@ -199,6 +212,27 @@ struct mmc_supply {
 	struct regulator *vqmmc;	/* Optional Vccq supply */
 };
 
+struct mmc_panic_host {
+	/*
+	 * DMA buffer for the log
+	 */
+	dma_addr_t      dmabuf;
+	void            *logbuf;
+	const struct mmc_host_panic_ops *panic_ops;
+	unsigned int            panic_ready;
+	unsigned int            totalsecs;
+	unsigned int            max_blk_size;
+	unsigned int            max_blk_count;
+	unsigned int            max_req_size;
+	unsigned int            blkaddr;
+	unsigned int            caps;
+	u32                     ocr;            /* the current OCR setting */
+	struct mmc_ios          ios;            /* current io bus settings */
+	struct mmc_card         *card;
+	struct mmc_host         *mmc;
+	void                    *priv;
+};
+
 struct mmc_host {
 	struct device		*parent;
 	struct device		class_dev;
@@ -269,6 +303,7 @@ struct mmc_host {
 	u32			caps2;		/* More host capabilities */
 
 #define MMC_CAP2_BOOTPART_NOACC	(1 << 0)	/* Boot partition no access */
+#define MMC_CAP2_CACHE_CTRL     (1 << 1)        /* Allow cache control */
 #define MMC_CAP2_FULL_PWR_CYCLE	(1 << 2)	/* Can do full power cycle */
 #define MMC_CAP2_HS200_1_8V_SDR	(1 << 5)        /* can support */
 #define MMC_CAP2_HS200_1_2V_SDR	(1 << 6)        /* can support */
@@ -289,16 +324,14 @@ struct mmc_host {
 #define MMC_CAP2_HSX00_1_2V	(MMC_CAP2_HS200_1_2V_SDR | MMC_CAP2_HS400_1_2V)
 #define MMC_CAP2_SDIO_IRQ_NOTHREAD (1 << 17)
 #define MMC_CAP2_INIT_CARD_SYNC	(1 << 15)	/* init card in sync mode */
-#define MMC_CAP2_POLL_R1B_BUSY	(1 << 16)	/* host poll R1B busy*/
-#define MMC_CAP2_RPMBPART_NOACC	(1 << 17)	/* RPMB partition no access */
-#define MMC_CAP2_LED_SUPPORT	(1 << 18)	/* led support */
-#define MMC_CAP2_PWCTRL_POWER	(1 << 19)	/* power control card power */
-#define MMC_CAP2_FIXED_NCRC	(1 << 20)	/* fixed NCRC */
-#define MMC_CAP2_HS200_WA	(1 << 21)	/* WA: 100MHz clock in HS200 */
-#define MMC_CAP2_HS400_1_8V_DDR	(1 << 22)	/* support HS400 */
-#define MMC_CAP2_HS400_1_2V_DDR	(1 << 23)	/* support HS400 */
-#define MMC_CAP2_HS400		(MMC_CAP2_HS400_1_8V_DDR | \
-				MMC_CAP2_HS400_1_2V_DDR)
+#define MMC_CAP2_POLL_R1B_BUSY  (1 << 16)       /* host poll R1B busy*/
+#define MMC_CAP2_RPMBPART_NOACC (1 << 17)       /* RPMB partition no access */
+#define MMC_CAP2_LED_SUPPORT    (1 << 18)       /* led support */
+#define MMC_CAP2_PWCTRL_POWER   (1 << 19)       /* power control card power */
+#define MMC_CAP2_FIXED_NCRC     (1 << 20)       /* fixed NCRC */
+#define MMC_CAP2_HS200_WA       (1 << 21)       /* WA: 100MHz clock in HS200 */
+#define MMC_CAP2_HS400_1_8V_DDR (1 << 22)       /* support HS400 */
+#define MMC_CAP2_HS400_1_2V_DDR (1 << 23)       /* support HS400 */
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 
@@ -327,6 +360,7 @@ struct mmc_host {
 	spinlock_t		lock;		/* lock for claim and bus ops */
 
 	struct mmc_ios		ios;		/* current io bus settings */
+	u32                     ocr;            /* the current OCR setting */
 
 	/* group bitfields together to minimize padding */
 	unsigned int		use_spi_crc:1;
@@ -384,8 +418,15 @@ struct mmc_host {
 	int			dsr_req;	/* DSR value is valid */
 	u32			dsr;	/* optional driver stage (DSR) value */
 
+	struct mmc_panic_host *phost;
 	unsigned long		private[0] ____cacheline_aligned;
 };
+
+#define SECTOR_SIZE    512
+int mmc_emergency_init(void);
+int mmc_emergency_write(char *, unsigned int);
+void mmc_alloc_panic_host(struct mmc_host *, const struct mmc_host_panic_ops *);
+void mmc_emergency_setup(struct mmc_host *host);
 
 struct mmc_host *mmc_alloc_host(int extra, struct device *);
 int mmc_add_host(struct mmc_host *);
@@ -403,6 +444,8 @@ static inline void *mmc_priv(struct mmc_host *host)
 #define mmc_dev(x)	((x)->parent)
 #define mmc_classdev(x)	(&(x)->class_dev)
 #define mmc_hostname(x)	(dev_name(&(x)->class_dev))
+
+int mmc_suspend_host(struct mmc_host *);
 
 int mmc_power_save_host(struct mmc_host *host);
 int mmc_power_restore_host(struct mmc_host *host);

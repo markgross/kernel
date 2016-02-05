@@ -634,7 +634,7 @@ static int __dwc3_gadget_ep_enable(struct dwc3_ep *dep,
 	return 0;
 }
 
-static void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool force);
+static void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool forcerm);
 static void dwc3_remove_requests(struct dwc3 *dwc, struct dwc3_ep *dep)
 {
 	struct dwc3_request		*req;
@@ -1726,7 +1726,7 @@ static int __dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on)
 	return 0;
 }
 
-static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on)
+static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 {
 	u32			reg;
 	u32			timeout = 500;
@@ -1844,27 +1844,6 @@ static int dwc3_init_for_enumeration(struct dwc3 *dwc)
 	struct dwc3_ep		*dep;
 	int			ret = 0;
 	u32			reg;
-
-	irq = platform_get_irq(to_platform_device(dwc->dev), 0);
-	ret = request_threaded_irq(irq, dwc3_interrupt, dwc3_thread_interrupt,
-			IRQF_SHARED, "dwc3", dwc);
-	if (ret) {
-		dev_err(dwc->dev, "failed to request irq #%d --> %d\n",
-				irq, ret);
-		goto err0;
-	}
-
-	spin_lock_irqsave(&dwc->lock, flags);
-
-	if (dwc->gadget_driver) {
-		dev_err(dwc->dev, "%s is already bound to %s\n",
-				dwc->gadget.name,
-				dwc->gadget_driver->driver.name);
-		ret = -EBUSY;
-		goto err1;
-	}
-
-	dwc->gadget_driver	= driver;
 
 	reg = dwc3_readl(dwc->regs, DWC3_DCFG);
 	reg &= ~(DWC3_DCFG_SPEED_MASK);
@@ -2008,7 +1987,6 @@ static int dwc3_gadget_stop(struct usb_gadget *g)
 {
 	struct dwc3		*dwc = gadget_to_dwc(g);
 	unsigned long		flags;
-	int			irq;
 
 	spin_lock_irqsave(&dwc->lock, flags);
 
@@ -2497,7 +2475,7 @@ static void dwc3_reset_gadget(struct dwc3 *dwc)
 	}
 }
 
-static void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool force)
+static void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool forcerm)
 {
 	struct dwc3_ep *dep;
 	struct dwc3_gadget_ep_cmd_params params;
@@ -2554,7 +2532,7 @@ static void dwc3_stop_active_transfer(struct dwc3 *dwc, u32 epnum, bool force)
 	 */
 
 	cmd = DWC3_DEPCMD_ENDTRANSFER;
-	cmd |= force ? DWC3_DEPCMD_HIPRI_FORCERM : 0;
+	cmd |= forcerm ? DWC3_DEPCMD_HIPRI_FORCERM : 0;
 	cmd |= DWC3_DEPCMD_CMDIOC;
 	cmd |= DWC3_DEPCMD_PARAM(dep->resource_index);
 	if (forcerm)
@@ -2969,20 +2947,6 @@ static void dwc3_gadget_hibernation_interrupt(struct dwc3 *dwc,
 	 */
 	if (is_ss ^ (dwc->speed == USB_SPEED_SUPER))
 		return;
-
-	if (next ==  DWC3_LINK_STATE_U3)
-		schedule_delayed_work(
-			&dwc->link_work, msecs_to_jiffies(1000));
-
-	dev_vdbg(dwc->dev, "%s link %d\n", __func__, dwc->link_state);
-}
-
-static void dwc3_gadget_hibernation_interrupt(struct dwc3 *dwc)
-{
-	dev_vdbg(dwc->dev, "%s\n", __func__);
-
-	if (dwc->hiber_enabled)
-		pm_runtime_put(dwc->dev);
 }
 
 static void dwc3_gadget_interrupt(struct dwc3 *dwc,
@@ -3012,9 +2976,6 @@ static void dwc3_gadget_interrupt(struct dwc3 *dwc,
 		break;
 	case DWC3_DEVICE_EVENT_LINK_STATUS_CHANGE:
 		dwc3_gadget_linksts_change_interrupt(dwc, event->event_info);
-		break;
-	case DWC3_DEVICE_EVENT_HIBER_REQ:
-		dwc3_gadget_hibernation_interrupt(dwc);
 		break;
 	case DWC3_DEVICE_EVENT_EOPF:
 		dwc3_trace(trace_dwc3_gadget, "End of Periodic Frame");
@@ -3071,7 +3032,6 @@ static irqreturn_t dwc3_process_event_buf(struct dwc3 *dwc, u32 buf)
 	irqreturn_t ret = IRQ_NONE;
 	int left;
 	u32 reg;
-	int i;
 
 	evt = dwc->ev_buffs[buf];
 	left = evt->count;
@@ -3554,7 +3514,7 @@ int dwc3_runtime_suspend(struct device *device)
 		dep->flags = DWC3_EP_HIBERNATION;
 	}
 
-	dwc3_gadget_run_stop(dwc, 0);
+	__dwc3_gadget_run_stop(dwc, 0);
 	dwc3_gadget_keep_conn(dwc, 1);
 
 	dwc3_cache_hwregs(dwc);
@@ -3568,8 +3528,8 @@ int dwc3_runtime_suspend(struct device *device)
 
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
-	__dwc3_vbus_draw(dwc, OTG_DEVICE_SUSPEND);
-	dev_dbg(dwc->dev, "%s(): suspended\n", __func__);
+	schedule_delayed_work(&dwc->link_work, msecs_to_jiffies(1000));
+	dev_info(dwc->dev, "suspended\n");
 	dev_vdbg(dwc->dev, "<--- %s()\n", __func__);
 
 	return 0;

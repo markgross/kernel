@@ -15,11 +15,17 @@
 #include <asm/intel-mid.h>
 #include <linux/wlan_plat.h>
 #include <linux/interrupt.h>
-#include <linux/mmc/sdhci.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include "pci/platform_sdhci_pci.h"
 #include "platform_wifi.h"
+#include "../../../../../drivers/mmc/host/sdhci.h"
+                        /* <linux/mmc/sdhci.h> was removed from
+                         * upstream and moved to mmc/host, but
+                         * is needed for SFI sdhci platform so
+                         * including relative path here for now
+                         */
+
 
 static struct resource wifi_res[] = {
 	{

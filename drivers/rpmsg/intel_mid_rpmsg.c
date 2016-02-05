@@ -150,7 +150,7 @@ int rpmsg_send_command(struct rpmsg_instance *instance, u32 cmd,
 	/* Prepare Tx buffer */
 	instance->tx_msg->cmd = cmd;
 	instance->tx_msg->sub = sub;
-	instance->tx_msg->in = in;
+	instance->tx_msg->in = (u32 *)in;
 	instance->tx_msg->out = out;
 	instance->tx_msg->inlen = inlen;
 	instance->tx_msg->outlen = outlen;
@@ -159,7 +159,7 @@ int rpmsg_send_command(struct rpmsg_instance *instance, u32 cmd,
 	mutex_lock(&instance->rx_lock);
 	instance->rx_msg->status = -1;
 	mutex_unlock(&instance->rx_lock);
-	INIT_COMPLETION(instance->reply_arrived);
+	reinit_completion(&instance->reply_arrived);
 
 	/* Send message to remote processor(SCU) using rpdev channel */
 	ret = rpmsg_send_offchannel(

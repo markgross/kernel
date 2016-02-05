@@ -21,11 +21,16 @@
 #include <asm/intel_scu_pmic.h>
 #include <linux/intel_mid_pm.h>
 #include <linux/hardirq.h>
-#include <linux/mmc/sdhci.h>
 #include <linux/regulator/machine.h>
 #include <linux/regulator/fixed.h>
 #include <linux/acpi.h>
-#include <linux/acpi_gpio.h>
+
+#include "../../../../../../drivers/mmc/host/sdhci.h"
+			/* <linux/mmc/sdhci.h> was removed from
+			 * upstream and moved to mmc/host, but
+			 * is needed for SFI sdhci platform so
+			 * including relative path here for now
+			 */
 
 #include "platform_sdhci_pci.h"
 
@@ -298,11 +303,6 @@ static int mrfl_flis_check(void *data, unsigned int clk)
 	return ret;
 }
 
-/* Board specific cleanup related to SDIO goes here */
-static void mrfl_sdio_cleanup(struct sdhci_pci_data *data)
-{
-}
-
 /* Board specific setup related to eMMC goes here */
 static int mrfl_emmc_setup(struct sdhci_pci_data *data)
 {
@@ -325,9 +325,10 @@ static int mrfl_sd_setup(struct sdhci_pci_data *data)
 	 * Change necessary GPIO pin mode for SD card working.
 	 * This is something should be done in IA firmware.
 	 * But, anyway, just do it here in case IA firmware
-	 * forget to do so.
+	 * forget to do so. 
 	 */
-	lnw_gpio_set_alt(MRFLD_GPIO_SDIO_0_CD, 0);
+	 /* Not supported in upstream intel mid transition from lnw_* */
+	 lnw_gpio_set_alt(MRFLD_GPIO_SDIO_0_CD, 0);
 
 	err = intel_scu_ipc_ioread8(MRFLD_PMIC_VLDOCNT, &vldocnt);
 	if (err) {
@@ -499,55 +500,17 @@ static struct sdhci_pci_data *get_sdhci_platform_data(struct pci_dev *pdev)
 		switch (PCI_FUNC(pdev->devfn)) {
 		case 0:
 			pdata = &mrfl_sdhci_pci_data[EMMC0_INDEX];
-			/*
-			 * The current eMMC device simulation in Merrifield
-			 * VP only implements boot partition 0, does not
-			 * implements boot partition 1. And the VP will
-			 * crash if eMMC boot partition 1 is accessed
-			 * during kernel boot. So, we just disable boot
-			 * partition support for Merrifield VP platform.
-			 */
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_VP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_EMMC_BOOT_PART;
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_HVP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_HIGH_SPEED;
 			break;
 		case 1:
 			pdata = &mrfl_sdhci_pci_data[EMMC1_INDEX];
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_VP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_EMMC_BOOT_PART;
-			/*
-			 * Merrifield HVP platform only implements
-			 * eMMC0 host controller in its FPGA, and
-			 * does not implements other 3 Merrifield
-			 * SDHCI host controllers.
-			 */
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_HVP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_HOST_CTRL_HW;
 			break;
 		case 2:
 			pdata = &mrfl_sdhci_pci_data[SD_INDEX];
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_HVP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_HOST_CTRL_HW;
 			break;
 		case 3:
 			pdata = &mrfl_sdhci_pci_data[SDIO_INDEX];
-			if (intel_mid_identify_sim() ==
-					INTEL_MID_CPU_SIMULATION_HVP)
-				pdata->platform_quirks |=
-					PLFM_QUIRK_NO_HOST_CTRL_HW;
-				pdata->quirks = sdhci_pdata_quirks;
-				pdata->register_embedded_control =
+			pdata->quirks = sdhci_pdata_quirks;
+			pdata->register_embedded_control =
 					sdhci_embedded_control;
 			break;
 		default:

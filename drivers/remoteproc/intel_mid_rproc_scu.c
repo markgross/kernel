@@ -81,7 +81,11 @@ static void scu_ipc_send_command(void *tx_buf)
 	struct tx_ipc_msg *tx_msg;
 
 	tx_msg = (struct tx_ipc_msg *)tx_buf;
-	intel_scu_ipc_send_command(tx_msg->sub << 12 | tx_msg->cmd);
+	/* No longer available as exported function, using simple version.
+	 * Rewite of SCU/rproc needed to use direct passthrough.
+	 */
+	 /* intel_scu_ipc_send_command(tx_msg->sub << 12 | tx_msg->cmd); */
+	intel_scu_ipc_simple_command(tx_msg->cmd, tx_msg->sub);
 }
 
 static int scu_ipc_fw_command(void *tx_buf)

@@ -166,8 +166,7 @@ int __init soc_debug_init(void)
 	int i = 0;
 	enum pgrr_mode soc_debug_setting = 0;
 
-	if ((intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER) &&
-	    (intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_ANNIEDALE))
+	if (intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER)
 		return -EINVAL;
 
 	/* Read Policy Generator Result Register */

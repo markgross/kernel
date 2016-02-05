@@ -90,7 +90,7 @@
 	((ptable->header.len - sizeof(struct sfi_table_header)) / \
 	(sizeof(entry_type)))
 
-#define SPID_FRU_SIZE	10
+#define SPID_FRU_SIZE  10
 
 /*
  * Table structures must be byte-packed to match the SFI specification,

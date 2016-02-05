@@ -14,8 +14,17 @@
 #include <linux/types.h>
 #include <linux/init.h>
 #include <linux/sfi.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <asm/intel_mid_pcihelpers.h>
+
+#ifdef CONFIG_SFI
+extern void install_irq_resource(struct platform_device *pdev, int irq);
+#else
+/* Dummy function to prevent compilation error in byt */
+static inline void install_irq_resource(struct platform_device *pdev, int irq)
+{};
+#endif
 
 /*
  * Access to message bus through three registers
@@ -100,6 +109,24 @@ struct devs_id {
 				struct devs_id *dev);
 };
 
+#define SD_NAME_SIZE 16
+/**
+ * struct sd_board_info - template for device creation
+ * @name: Initializes sdio_device.name; identifies the driver.
+ * @bus_num: board-specific identifier for a given SDIO controller.
+ * @board_ref_clock: Initializes sd_device.board_ref_clock;
+ * @platform_data: Initializes sd_device.platform_data; the particular
+ *      data stored there is driver-specific.
+ *
+ */
+struct sd_board_info {
+	char            name[SD_NAME_SIZE];
+	int             bus_num;
+	unsigned short  addr;
+	u32             board_ref_clock;
+	void            *platform_data;
+};
+
 #define sfi_device(i)   \
 	static const struct devs_id *const __intel_mid_sfi_##i##_dev __used \
 	__attribute__((__section__(".x86_intel_mid_dev.init"))) = &i
@@ -144,10 +171,13 @@ struct intel_mid_ops {
  * declared in arch/x86/platform/intel_mid/intel_mid_weak_decls.h.
  */
 #define INTEL_MID_OPS_INIT {\
-	DECLARE_INTEL_MID_OPS_INIT(penwell, INTEL_MID_CPU_CHIP_PENWELL), \
-	DECLARE_INTEL_MID_OPS_INIT(cloverview, INTEL_MID_CPU_CHIP_CLOVERVIEW), \
 	DECLARE_INTEL_MID_OPS_INIT(tangier, INTEL_MID_CPU_CHIP_TANGIER) \
 };
+/*	Add pnwl.c/clv.c with necessary ops struct/functions for these if you
+	want them supported:
+	DECLARE_INTEL_MID_OPS_INIT(penwell, INTEL_MID_CPU_CHIP_PENWELL), \
+	DECLARE_INTEL_MID_OPS_INIT(cloverview, INTEL_MID_CPU_CHIP_CLOVERVIEW), \
+*/
 
 #ifdef CONFIG_X86_INTEL_MID
 
@@ -210,6 +240,8 @@ extern void hsu_early_console_init(const char *);
 
 extern void intel_scu_devices_create(void);
 extern void intel_scu_devices_destroy(void);
+extern void intel_psh_devices_create(void);
+extern void intel_psh_devices_destroy(void);
 
 /* VRTC timer */
 #define MRST_VRTC_MAP_SZ	(1024)

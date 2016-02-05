@@ -144,6 +144,27 @@ static void sdhci_dumpregs(struct sdhci_host *host)
  *                                                                           *
 \*****************************************************************************/
 
+static void sdhci_clear_set_irqs(struct sdhci_host *host, u32 clear, u32 set)
+{
+	u32 ier;
+
+	ier = sdhci_readl(host, SDHCI_INT_ENABLE);
+	ier &= ~clear;
+	ier |= set;
+	sdhci_writel(host, ier, SDHCI_INT_ENABLE);
+	sdhci_writel(host, ier, SDHCI_SIGNAL_ENABLE);
+}
+
+static void sdhci_unmask_irqs(struct sdhci_host *host, u32 irqs)
+{
+	sdhci_clear_set_irqs(host, 0, irqs);
+}
+
+static void sdhci_mask_irqs(struct sdhci_host *host, u32 irqs)
+{
+	sdhci_clear_set_irqs(host, irqs, 0);
+}
+
 static void sdhci_set_card_detection(struct sdhci_host *host, bool enable)
 {
 	u32 present;
@@ -1606,7 +1627,6 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	/* Firstly check card presence */
 	present = sdhci_do_get_cd(host);
-	sdhci_acquire_ownership(host->mmc);
 
 	spin_lock_irqsave(&host->lock, flags);
 
@@ -1906,7 +1926,6 @@ static void sdhci_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	struct sdhci_host *host = mmc_priv(mmc);
 
 	sdhci_runtime_pm_get(host);
-	sdhci_acquire_ownership(mmc);
 	sdhci_do_set_ios(host, ios);
 	sdhci_release_ownership(mmc);
 	sdhci_runtime_pm_put(host);
@@ -2606,7 +2625,6 @@ static void sdhci_tasklet_finish(unsigned long param)
 	mmiowb();
 	spin_unlock_irqrestore(&host->lock, flags);
 
-	sdhci_release_ownership(host->mmc);
 	mmc_request_done(host->mmc, mrq);
 	sdhci_runtime_pm_put(host);
 }
@@ -2638,9 +2656,6 @@ static void sdhci_timeout_timer(unsigned long data)
 		pr_err("%s: Timeout waiting for hardware "
 			"interrupt.\n", mmc_hostname(host->mmc));
 		sdhci_dumpregs(host);
-
-		if (host->rte_addr)
-			dump_rte_apic_reg(host, host->rte_addr);
 
 		if (host->data) {
 			host->data->error = -ETIMEDOUT;
@@ -3295,7 +3310,7 @@ static void sdhci_panic_cmd_irq(struct sdhci_host *host, u32 intmask)
 
 	if (host->cmd->flags & MMC_RSP_BUSY) {
 		if (host->cmd->data)
-			pr_dbg("Cannot wait for busy signal when also doing a data transfer\n");
+			pr_info("Cannot wait for busy signal when also doing a data transfer\n");
 		else if (!(host->quirks & SDHCI_QUIRK_NO_BUSY_IRQ))
 			if (!host->r1b_busy_end) {
 				host->r1b_busy_end = 1;
@@ -3456,9 +3471,9 @@ static void sdhci_mfld_panic_set_ios(struct mmc_panic_host *mmc)
 	sdhci_set_clock(host, ios->clock);
 
 	if (ios->power_mode == MMC_POWER_OFF)
-		sdhci_set_power(host, -1);
+		sdhci_set_power(host, -1, ios->vdd);
 	else
-		sdhci_set_power(host, ios->vdd);
+		sdhci_set_power(host, ios->power_mode, ios->vdd);
 
 	if (host->ops->platform_send_init_74_clocks)
 		host->ops->platform_send_init_74_clocks(host, ios->power_mode);
@@ -3816,7 +3831,6 @@ int sdhci_resume_host(struct sdhci_host *host)
 	host->suspended = false;
 	spin_unlock_irqrestore(&host->lock, flags);
 
-	ret = mmc_resume_host(host->mmc);
 	sdhci_enable_card_detection(host);
 
 	/* Set the re-tuning expiration flag */

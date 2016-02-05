@@ -81,6 +81,18 @@
 /* TX RX interrupt level threshold, max can be 256 */
 #define SPI_INT_THRESHOLD		32
 
+/* Intel specific SPI */
+#define START_STATE     ((void *)0)
+#define RUNNING_STATE   ((void *)1)
+#define DONE_STATE      ((void *)2)
+#define ERROR_STATE     ((void *)-1)
+
+#define QUEUE_RUNNING   0
+#define QUEUE_STOPPED   1
+
+#define MRST_SPI_DEASSERT       0
+#define MRST_SPI_ASSERT         1
+
 enum dw_ssi_type {
 	SSI_MOTO_SPI = 0,
 	SSI_TI_SSP,
@@ -91,20 +103,23 @@ struct dw_spi;
 struct dw_spi_dma_ops {
 	int (*dma_init)(struct dw_spi *dws);
 	void (*dma_exit)(struct dw_spi *dws);
+	int (*dma_setup)(struct dw_spi *dws, struct spi_transfer *xfer);
 	bool (*can_dma)(struct spi_master *master, struct spi_device *spi,
 			struct spi_transfer *xfer);
-	int (*dma_transfer)(struct dw_spi *dws, int cs_change);
-	int (*dma_suspend)(struct dw_spi *dws);
-	int (*dma_resume)(struct dw_spi *dws);
+	int (*dma_transfer)(struct dw_spi *dws, struct spi_transfer *xfer);
+	void (*dma_stop)(struct dw_spi *dws);
 };
 
 struct dw_spi {
 	struct spi_master	*master;
+	struct spi_device       *cur_dev;
+	struct device           *parent_dev;
 	enum dw_ssi_type	type;
 	char			name[16];
 
 	void __iomem		*regs;
 	unsigned long		paddr;
+	u32                     iolen;
 	int			irq;
 	u32			fifo_len;	/* depth of the FIFO buffer */
 	u32			max_freq;	/* max bus freq supported */
@@ -112,34 +127,41 @@ struct dw_spi {
 	u16			bus_num;
 	u16			num_cs;		/* supported slave numbers */
 
-	/* Driver message queue */
-	struct workqueue_struct	*workqueue;
-	struct work_struct	pump_messages;
-	spinlock_t		lock;
-	struct list_head	queue;
-	int			run;
-
-	/* Message Transfer pump */
-	struct tasklet_struct	pump_transfers;
-
 	/* Current message transfer state info */
+	struct spi_message      *cur_msg;
+	struct spi_transfer     *cur_transfer;
+	struct chip_data        *cur_chip;
+	struct chip_data        *prev_chip;
 	size_t			len;
 	void			*tx;
 	void			*tx_end;
 	void			*rx;
 	void			*rx_end;
 	int			dma_mapped;
+	dma_addr_t              rx_dma;
+	dma_addr_t              tx_dma;
+	size_t                  rx_map_len;
+	size_t                  tx_map_len;
 	u8			n_bytes;	/* current is a 1/2 bytes op */
+	u8                      max_bits_per_word;      /* maxim is 16b */
 	u32			dma_width;
+	int                     cs_change;
 	irqreturn_t		(*transfer_handler)(struct dw_spi *dws);
+	void                    (*cs_control)(u32 command);
 
 	/* DMA info */
 	int			dma_inited;
 	struct dma_chan		*txchan;
+	struct scatterlist      tx_sgl;
 	struct dma_chan		*rxchan;
+	struct scatterlist      rx_sgl;
+	int                     dma_chan_done;
 	unsigned long		dma_chan_busy;
+	struct device           *dma_dev;
 	dma_addr_t		dma_addr; /* phy address of the Data register */
 	struct dw_spi_dma_ops	*dma_ops;
+	void                    *dma_priv; /* platform relate info */
+	struct pci_dev          *dmac;
 	void			*dma_tx;
 	void			*dma_rx;
 
@@ -216,10 +238,7 @@ extern int dw_spi_add_host(struct device *dev, struct dw_spi *dws);
 extern void dw_spi_remove_host(struct dw_spi *dws);
 extern int dw_spi_suspend_host(struct dw_spi *dws);
 extern int dw_spi_resume_host(struct dw_spi *dws);
-extern void dw_spi_xfer_done(struct dw_spi *dws);
-extern int dw_spi_stop_queue(struct dw_spi *dws);
 
 /* platform related setup */
-/* Intel MID platforms */
-extern int dw_spi_mid_init(struct dw_spi *dws, int bus_num);
+extern int dw_spi_mid_init(struct dw_spi *dws); /* Intel MID platforms */
 #endif /* DW_SPI_HEADER_H */

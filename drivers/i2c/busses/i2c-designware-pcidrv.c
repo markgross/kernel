@@ -113,11 +113,6 @@ static struct dw_pci_controller dw_pci_controllers[] = {
 	},
 };
 
-static struct i2c_algorithm i2c_dw_algo = {
-	.master_xfer	= i2c_dw_xfer,
-	.functionality	= i2c_dw_func,
-};
-
 #ifdef CONFIG_PM
 static int i2c_dw_pci_suspend(struct device *dev)
 {
@@ -195,10 +190,11 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 	struct dw_i2c_dev *dev;
 	unsigned long start, len;
 	int r;
-	struct dw_scl_sda_cfg *cfg;
-
 	int bus_idx;
 	static int bus_num;
+
+	bus_idx = id->driver_data + bus_num;
+	bus_num++;
 
 	r = pci_enable_device(pdev);
 	if (r) {
@@ -229,15 +225,6 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 		dev_err(&pdev->dev, "failed to setup i2c\n");
 		return -EINVAL;
  	}
-
-	if (controller->scl_sda_cfg) {
-		cfg = controller->scl_sda_cfg;
-		dev->ss_hcnt = cfg->ss_hcnt;
-		dev->fs_hcnt = cfg->fs_hcnt;
-		dev->ss_lcnt = cfg->ss_lcnt;
-		dev->fs_lcnt = cfg->fs_lcnt;
-		dev->sda_hold_time = cfg->sda_hold;
-	}
 
 	pci_set_drvdata(pdev, dev);
 

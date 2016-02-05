@@ -90,6 +90,7 @@
 #define  SDHCI_POWER_180	0x0A
 #define  SDHCI_POWER_300	0x0C
 #define  SDHCI_POWER_330	0x0E
+#define  SDHCI_HW_RESET         0x10
 
 #define SDHCI_BLOCK_GAP_CONTROL	0x2A
 
@@ -411,14 +412,65 @@ struct sdhci_host {
 /* Controller broken with using ACMD23 */
 #define SDHCI_QUIRK2_ACMD23_BROKEN			(1<<14)
 
+/* Intel private quirk2 starts on 15 */
+
+/* V2.0 host controller support DDR50 */
+#define SDHCI_QUIRK2_V2_0_SUPPORT_DDR50                 (1<<15)
+/* Controller has bug when enabling Auto CMD23 */
+#define SDHCI_QUIRK2_BROKEN_AUTO_CMD23                  (1<<16)
+/* HC Reg High Speed must be set later than HC2 Reg 1.8v Signaling Enable */
+#define SDHCI_QUIRK2_HIGH_SPEED_SET_LATE                (1<<17)
+/* BRCM voltage support: advertise 2.0v support and force using 1.8v instead */
+#define SDHCI_QUIRK2_ADVERTISE_2V0_FORCE_1V8            (1<<18)
+/* to allow mmc_detect to detach the bus */
+#define SDHCI_QUIRK2_DISABLE_MMC_CAP_NONREMOVABLE       (1<<19)
+/* avoid detect/rescan/poweoff operations on suspend/resume. */
+#define SDHCI_QUIRK2_ENABLE_MMC_PM_IGNORE_PM_NOTIFY     (1<<20)
+/* Disable eMMC/SD card High speed feature. */
+#define SDHCI_QUIRK2_DISABLE_HIGH_SPEED                 (1<<21)
+#define SDHCI_QUIRK2_CAN_VDD_300                        (1<<22)
+#define SDHCI_QUIRK2_CAN_VDD_330                        (1<<23)
+#define SDHCI_QUIRK2_2MS_DELAY                          (1<<24)
+#define SDHCI_QUIRK2_WAIT_FOR_IDLE                      (1<<25)
+/* BAD sd cd in HOST IC. This will cause system hang when removing SD */
+#define SDHCI_QUIRK2_BAD_SD_CD                          (1<<26)
+#define SDHCI_QUIRK2_POWER_PIN_GPIO_MODE                (1<<27)
+#define SDHCI_QUIRK2_ADVERTISE_3V0_FORCE_1V8   (1<<28)
+#define SDHCI_QUIRK2_NON_STD_CIS   (1<<29)
+#define SDHCI_QUIRK2_TUNING_POLL                        (1<<30)
+
 	int irq;		/* Device IRQ */
 	void __iomem *ioaddr;	/* Mapped address */
 
-	const struct sdhci_ops *ops;	/* Low level hw interface */
+	/*
+	* XXX: SCU/X86 mutex variables base address in shared SRAM
+	* NOTE: Max size of this struct is 16 bytes
+	* without shared SRAM re-organization.
+	*/
+	void __iomem *sram_addr;        /* Shared SRAM address */
+
+	void __iomem *rte_addr; /* IOAPIC RTE register address */
+
+#define DEKKER_EMMC_OWNER_OFFSET        0
+#define DEKKER_IA_REQ_OFFSET            0x04
+#define DEKKER_SCU_REQ_OFFSET           0x08
+/* 0xc offset: state of the emmc chip to SCU. */
+#define DEKKER_EMMC_STATE               0x0c
+#define DEKKER_OWNER_IA                 0
+#define DEKKER_OWNER_SCU                1
+#define DEKKER_EMMC_CHIP_ACTIVE         0
+#define DEKKER_EMMC_CHIP_SUSPENDED      1
+
+	unsigned int    usage_cnt;      /* eMMC mutex usage count */
+
+	const struct sdhci_ops *ops;    /* Low level hw interface */
+
+	struct regulator *vmmc;         /* Power regulator (vmmc) */
+	struct regulator *vqmmc;        /* Signaling regulator (vccq) */
 
 	/* Internal data */
-	struct mmc_host *mmc;	/* MMC structure */
-	u64 dma_mask;		/* custom DMA mask */
+	struct mmc_host *mmc;   /* MMC structure */
+	u64 dma_mask;           /* custom DMA mask */
 
 #if defined(CONFIG_LEDS_CLASS) || defined(CONFIG_LEDS_CLASS_MODULE)
 	struct led_classdev led;	/* LED control */
@@ -426,6 +478,7 @@ struct sdhci_host {
 #endif
 
 	spinlock_t lock;	/* Mutex */
+	spinlock_t dekker_lock; /* eMMC Dekker Mutex lock */
 
 	int flags;		/* Host attributes */
 #define SDHCI_USE_SDMA		(1<<0)	/* Host is SDMA capable */
@@ -453,6 +506,7 @@ struct sdhci_host {
 	u8 pwr;			/* Current voltage */
 
 	bool runtime_suspended;	/* Host is runtime suspended */
+	bool suspended;         /* Host is suspended */
 	bool bus_on;		/* Bus power prevents runtime suspend */
 	bool preset_enabled;	/* Preset is enabled */
 
@@ -460,6 +514,7 @@ struct sdhci_host {
 	struct mmc_command *cmd;	/* Current command */
 	struct mmc_data *data;	/* Current data request */
 	unsigned int data_early:1;	/* Data finished before cmd */
+	unsigned int r1b_busy_end:1;    /* R1B busy end */
 	unsigned int busy_handle:1;	/* Handling the order of Busy-end */
 
 	struct sg_mapping_iter sg_miter;	/* SG state for PIO */
@@ -480,7 +535,8 @@ struct sdhci_host {
 	unsigned int align_sz;	/* ADMA alignment */
 	unsigned int align_mask;	/* ADMA alignment mask */
 
-	struct tasklet_struct finish_tasklet;	/* Tasklet structures */
+	struct tasklet_struct card_tasklet;     /* Tasklet structures */
+	struct tasklet_struct finish_tasklet;
 
 	struct timer_list timer;	/* Timer for timeouts */
 
@@ -538,6 +594,7 @@ struct sdhci_ops {
 	int	(*platform_execute_tuning)(struct sdhci_host *host, u32 opcode);
 	void	(*set_uhs_signaling)(struct sdhci_host *host, unsigned int uhs);
 	void	(*hw_reset)(struct sdhci_host *host);
+	void    (*platform_suspend)(struct sdhci_host *host);
 	void    (*adma_workaround)(struct sdhci_host *host, u32 intmask);
 	void	(*platform_init)(struct sdhci_host *host);
 	void    (*card_event)(struct sdhci_host *host);

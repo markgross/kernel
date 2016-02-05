@@ -2693,6 +2693,7 @@ static int mmc_blk_resume(struct device *dev)
 {
 	struct mmc_blk_data *part_md;
 	struct mmc_blk_data *md = dev_get_drvdata(dev);
+	struct mmc_card *card = NULL;
 
 	if (md) {
 		/*
@@ -2701,6 +2702,7 @@ static int mmc_blk_resume(struct device *dev)
 		 */
 		md->part_curr = md->part_type;
 		mmc_queue_resume(&md->queue);
+		card = md->queue.card;
 		list_for_each_entry(part_md, &md->part, part) {
 			mmc_queue_resume(&part_md->queue);
 			if (part_md->part_type ==
