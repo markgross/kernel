@@ -269,19 +269,14 @@ static struct platform_driver usb_xhci_driver = {
 };
 MODULE_ALIAS("platform:xhci-hcd");
 
-static int __init xhci_plat_init(void)
-{
-	xhci_init_driver(&xhci_plat_hc_driver, xhci_plat_setup);
-	xhci_plat_hc_driver.start = xhci_plat_start;
-	return platform_driver_register(&usb_xhci_driver);
-}
-
 #ifdef CONFIG_USB_DWC3_HOST_INTEL
 #include "../dwc3/dwc3-host-intel.c"
 #endif
 
-int xhci_register_plat(void)
+static int __init xhci_plat_init(void)
 {
+	xhci_init_driver(&xhci_plat_hc_driver, xhci_plat_setup);
+	xhci_plat_hc_driver.start = xhci_plat_start;
 #ifdef CONFIG_USB_DWC3_HOST_INTEL
 	return platform_driver_register(&dwc3_xhci_driver);
 #endif

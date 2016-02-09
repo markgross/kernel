@@ -17,8 +17,9 @@
 #include <asm/intel-mid.h>
 #include <asm/pmic_pdata.h>
 #include <asm/intel_mid_remoteproc.h>
+#ifdef CONFIG_BQ24261_CHARGER
 #include <linux/power/bq24261_charger.h>
-
+#endif
 #include "platform_ipc.h"
 #include "platform_mrfl_pmic.h"
 
@@ -52,3 +53,12 @@ out:
 	return &pmic_pdata;
 }
 
+static const struct devs_id pmic_ccsm_dev_id __initconst = {
+	.name = "pmic_ccsm",
+	.type = SFI_DEV_TYPE_IPC,
+	.delay = 1,
+	.get_platform_data = &mrfl_pmic_ccsm_platform_data,
+	.device_handler = &ipc_device_handler,
+};
+
+sfi_device(pmic_ccsm_dev_id);

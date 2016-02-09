@@ -19,6 +19,11 @@ config USB_EHCI_BIG_ENDIAN_MMIO
 config USB_EHCI_BIG_ENDIAN_DESC
 	bool
 
+# some non-PCI HCDs implement xHCI
+config USB_ARCH_HAS_XHCI
+	boolean
+	default PCI
+
 menuconfig USB_SUPPORT
 	bool "USB support"
 	depends on HAS_IOMEM

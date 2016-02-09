@@ -54,6 +54,8 @@
 
 #include <asm/apic.h>
 
+#include <asm/intel-mid.h>
+
 #define	for_each_ioapic(idx)		\
 	for ((idx) = 0; (idx) < nr_ioapics; (idx)++)
 #define	for_each_ioapic_reverse(idx)	\
@@ -968,24 +970,44 @@ static int alloc_irq_from_domain(struct irq_domain *domain, u32 gsi, int pin)
 		 * Dynamically allocate IRQ number for non-ISA IRQs in the first 16
 		 * GSIs on some weird platforms.
 		 */
+		pr_debug("%s: IOAPIC_DOMAIN_LEGACY, gsi=%u, nr_legacy_irqs=%d\n",
+			__func__, gsi, nr_legacy_irqs());
 		if (gsi < nr_legacy_irqs())
 			irq = irq_create_mapping(domain, pin);
 		else if (irq_create_strict_mappings(domain, gsi, pin, 1) == 0)
 			irq = gsi;
+		pr_debug("%s: irq=%d\n", __func__, irq);
 		break;
 	case IOAPIC_DOMAIN_STRICT:
-		if (irq_create_strict_mappings(domain, gsi, pin, 1) == 0)
+		pr_debug("%s: IOAPIC_DOMAIN_STRICT\n", __func__);
+		if (irq_create_strict_mappings(domain, gsi, pin, 1) == 0) {
 			irq = gsi;
+			pr_debug("%s: irq = gsi = %u\n", __func__, gsi);
+		} else
+			pr_debug("%s: failed, irq=%d\n", __func__, irq);
 		break;
 	case IOAPIC_DOMAIN_DYNAMIC:
+		pr_debug("%s: IOAPIC_DOMAIN_DYNAMIC\n", __func__);
 		irq = irq_create_mapping(domain, pin);
+		pr_debug("%s: irq=%d\n", __func__, irq);
 		break;
 	default:
 		WARN(1, "ioapic: unknown irqdomain type %d\n", type);
 		break;
 	}
 
-	return irq > 0 ? irq : -1;
+	/* We have to add in a case for platforms that do use IRQ == 0,
+	 * like the Intel Merrifield which uses IRQ 0 for the sdhci-pci
+	 * control for the eMMC.
+	 */
+	if ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && irq == 0) {
+		pr_debug("%s: CPU == INTEL_MID_CPU_CHIP_TANGIER, return irq=%d\n",
+			__func__, irq);
+		return irq;
+	} else {
+		pr_debug("%s: return irq=%d\n", __func__, irq > 0 ? irq : -1);
+		return irq > 0 ? irq : -1;
+	}
 }
 
 static int mp_map_pin_to_irq(u32 gsi, int idx, int ioapic, int pin,
@@ -1025,15 +1047,20 @@ static int mp_map_pin_to_irq(u32 gsi, int idx, int ioapic, int pin,
 		}
 	} else {
 		irq = irq_find_mapping(domain, pin);
-		if (irq <= 0 && (flags & IOAPIC_MAP_ALLOC))
+		pr_debug("%s: irq=%d\n", __func__, irq);
+		if (irq <= 0 && (flags & IOAPIC_MAP_ALLOC)) {
 			irq = alloc_irq_from_domain(domain, gsi, pin);
+			pr_debug("%s: irq=%d\n", __func__, irq);
+		}
 	}
 
 	if (flags & IOAPIC_MAP_ALLOC) {
 		/* special handling for legacy IRQs */
 		if (irq < nr_legacy_irqs() && info->count == 1 &&
-		    mp_irqdomain_map(domain, irq, pin) != 0)
+		    mp_irqdomain_map(domain, irq, pin) != 0) {
 			irq = -1;
+			pr_debug("%s: irq=%d\n", __func__, irq);
+		}
 
 		if (irq > 0)
 			info->count++;
@@ -1041,9 +1068,24 @@ static int mp_map_pin_to_irq(u32 gsi, int idx, int ioapic, int pin,
 			info->set = 0;
 	}
 
+        pr_debug("%s:: info->trigger=%d, info->polarity=%d, "
+		"info->node=%d, info->set=%d, info->count=%u\n",
+		__func__, info->trigger, info->polarity, info->node, 
+		info->set, info->count);
+
 	mutex_unlock(&ioapic_mutex);
 
-	return irq > 0 ? irq : -1;
+	/* We have to add in a case for platforms that do use IRQ == 0,
+	 * like the Intel Merrifield which uses IRQ 0 for the sdhci-pci
+	 * control for the eMMC.
+	 */
+	if ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && irq == 0) {
+		pr_debug("%s: return irq=%d\n", __func__, irq);
+		return irq;
+	} else {
+		pr_debug("%s: return irq=%d\n", __func__, irq > 0 ? irq : -1);
+		return irq > 0 ? irq : -1;
+	}
 }
 
 static int pin_2_irq(int idx, int ioapic, int pin, unsigned int flags)
@@ -1084,6 +1126,7 @@ int mp_map_gsi_to_irq(u32 gsi, unsigned int flags)
 	int ioapic, pin, idx;
 
 	ioapic = mp_find_ioapic(gsi);
+	pr_debug("%s: gsi=%u, ioapic=%d\n", __func__, gsi, ioapic);
 	if (ioapic < 0)
 		return -1;
 
@@ -1091,7 +1134,8 @@ int mp_map_gsi_to_irq(u32 gsi, unsigned int flags)
 	idx = find_irq_entry(ioapic, pin, mp_INT);
 	if ((flags & IOAPIC_MAP_CHECK) && idx < 0)
 		return -1;
-
+	pr_debug("%s: gsi=%u, idx=%d, ioapic=%d, pin=%d, "
+		"flags=%u\n", __func__, gsi, idx, ioapic, pin, flags);
 	return mp_map_pin_to_irq(gsi, idx, ioapic, pin, flags);
 }
 
@@ -3098,25 +3142,39 @@ int mp_set_gsi_attr(u32 gsi, int trigger, int polarity, int node)
 	struct mp_pin_info *info;
 
 	ioapic = mp_find_ioapic(gsi);
-	if (ioapic < 0)
+	pr_debug("%s: ioapic=%d\n", __func__, ioapic);
+
+	if (ioapic < 0) {
+		pr_debug("%s: ioapic < 0, returning %d\n", __func__, -ENODEV);
 		return -ENODEV;
+	}
 
 	pin = mp_find_ioapic_pin(ioapic, gsi);
+	pr_debug("%s: pin=%d\n", __func__, pin);
 	info = mp_pin_info(ioapic, pin);
 	trigger = trigger ? 1 : 0;
 	polarity = polarity ? 1 : 0;
 
 	mutex_lock(&ioapic_mutex);
+	pr_debug("%s: info->trigger=%d, info->polarity=%d, info->node=%d, info->set=%d, "
+		"info->count=%u\n", __func__, info->trigger, info->polarity,
+		info->node, info->set, info->count);
 	if (!info->set) {
 		info->trigger = trigger;
 		info->polarity = polarity;
 		info->node = node;
 		info->set = 1;
+		pr_debug("%s: info wasn't set: info->trigger=%d, info->polarity=%d, "
+			"info->node=%d, info->set=%d, info->count=%u\n",
+			 __func__, info->trigger, info->polarity, info->node,
+			 info->set, info->count);
 	} else if (info->trigger != trigger || info->polarity != polarity) {
+		pr_debug("%s: ret = %d\n", __func__, -EBUSY);
 		ret = -EBUSY;
 	}
 	mutex_unlock(&ioapic_mutex);
 
+	pr_debug("%s: return ret=%d\n", __func__, ret);
 	return ret;
 }
 

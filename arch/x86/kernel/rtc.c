@@ -151,12 +151,21 @@ static int handle_mrfl_dev_ioapic(int irq)
 {
 	int ret = 0;
 	int polarity = 0; /*Active high */
+	int ioapic = 0;
+
+	ioapic = mp_find_ioapic(irq);
+        if (ioapic >= 0) {
+		pr_debug("%s: irq=%d, ioapic=%d\n", __func__, irq, ioapic);
+	} else {
+		pr_debug("%s: can't find interrupt %d in ioapic\n", __func__, irq);
+	}
 
 	ret = mp_set_gsi_attr(irq, 1, polarity, NUMA_NO_NODE);
 	if (ret == 0)
 		ret = mp_map_gsi_to_irq(irq, IOAPIC_MAP_ALLOC);
 	WARN_ON(ret < 0);
 
+	pr_debug("%s: returning ret=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -208,10 +217,14 @@ static __init int add_rtc_cmos(void)
 	 */
 	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) {
 		ret = handle_mrfl_dev_ioapic(RTC_IRQ);
+/* Tracing through the ioapic calls this just seems wrong in how
+ * the ret is being interpreted in 4.xLTS
 		if (ret) {
+*/		if (ret < 0) {
 			pr_warn("Error adding Merrifield device ioapic for RTC\n");
 			return ret;
 		}
+
 	}
 
 	platform_device_register(&rtc_device);

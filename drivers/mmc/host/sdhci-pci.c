@@ -371,6 +371,7 @@ static int intel_mrfl_mmc_probe_slot(struct sdhci_pci_slot *slot)
 
 	switch (PCI_FUNC(slot->chip->pdev->devfn)) {
 	case INTEL_MRFL_EMMC_0:
+		pr_debug("%s: INTEL_MRFL_EMMC_0\n", __func__);
 		slot->host->mmc->caps |= MMC_CAP_8_BIT_DATA |
 					MMC_CAP_NONREMOVABLE |
 					MMC_CAP_1_8V_DDR;
@@ -387,12 +388,14 @@ static int intel_mrfl_mmc_probe_slot(struct sdhci_pci_slot *slot)
 		mrfl_ioapic_rte_reg_addr_map(slot);
 		break;
 	case INTEL_MRFL_SD:
+		pr_debug("%s: INTEL_MRFL_SD\n", __func__);
 		slot->host->quirks2 |= SDHCI_QUIRK2_WAIT_FOR_IDLE;
 		/* Force 3.3V signal voltage */
 		slot->host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 		slot->host->mmc->caps2 |= MMC_CAP2_FIXED_NCRC;
 		break;
 	case INTEL_MRFL_SDIO:
+		pr_debug("%s: INTEL_MRFL_SDIO\n", __func__);
 		slot->host->mmc->caps |= MMC_CAP_NONREMOVABLE;
 		break;
 	}
@@ -411,6 +414,7 @@ static int intel_mrfl_mmc_probe_slot(struct sdhci_pci_slot *slot)
 		ret = -ENODEV;
 	}
 
+	pr_debug("%s: return ret=%d\n", __func__, ret);
 	return ret;
 }
 
@@ -1844,7 +1848,7 @@ static int sdhci_pci_probe(struct pci_dev *pdev,
 		return ret;
 
 	slots = PCI_SLOT_INFO_SLOTS(slots) + 1;
-	dev_dbg(&pdev->dev, "found %d slot(s)\n", slots);
+	dev_info(&pdev->dev, "found %d slot(s)\n", slots);
 	if (slots == 0)
 		return -ENODEV;
 

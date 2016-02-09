@@ -223,9 +223,13 @@ static int _pmu2_wait_not_busy_yield(void)
 
 	/* wait max 500ms that the latest pmu command finished */
 	do {
-		if (_pmu_read_status(PMU_BUSY_STATUS) == 0)
+		if (_pmu_read_status(PMU_BUSY_STATUS) == 0) {
+			pr_debug("%s: pmu status=%d, return 0\n",
+				__func__, _pmu_read_status(PMU_BUSY_STATUS));
 			return 0;
-
+		}
+		pr_debug("%s: pmu status: PMU_BUSY_STATUS, pmu_busy_retry=%d\n",
+			__func__, pmu_busy_retry);
 		usleep_range(10, 12);
 		pmu_busy_retry -= 11;
 	} while (pmu_busy_retry > 0);
@@ -1330,6 +1334,8 @@ int __ref pmu_pci_set_power_state(struct pci_dev *pdev, pci_power_t state)
 	struct saved_nc_power_history *record = NULL;
 	bool d3_cold = false;
 
+	pr_debug("%s: dev->dev=%s, state=%d",
+		__func__, dev_name(&pdev->dev), state);
 	/* Ignore callback from devices until we have initialized */
 	if (unlikely((!pmu_initialized)) || !pdev->driver)
 		return 0;

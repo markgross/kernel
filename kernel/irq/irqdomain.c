@@ -453,12 +453,14 @@ int irq_create_strict_mappings(struct irq_domain *domain, unsigned int irq_base,
 			       irq_hw_number_t hwirq_base, int count)
 {
 	int ret;
-
+	
 	ret = irq_alloc_descs(irq_base, irq_base, count,
 			      of_node_to_nid(domain->of_node));
 	if (unlikely(ret < 0))
 		return ret;
 
+	pr_debug("%s: irq_base=%u, hwirq_base=%u, count=%d)\n",
+		__func__, irq_base, hwirq_base, count);
 	irq_domain_associate_many(domain, irq_base, hwirq_base, count);
 	return 0;
 }

@@ -232,7 +232,11 @@ static int i2c_dw_pci_probe(struct pci_dev *pdev,
 
 	pm_runtime_set_autosuspend_delay(&pdev->dev, 50);
 	pm_runtime_use_autosuspend(&pdev->dev);
+	
+	/* Not used in 3.10, might cause issue in 4.x for MRFLD;
+	 * disable for bring-up
 	pm_runtime_put_autosuspend(&pdev->dev);
+	*/
 	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_allow(&pdev->dev);
 

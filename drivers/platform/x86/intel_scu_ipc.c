@@ -568,6 +568,8 @@ int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
 	mutex_lock(&ipclock);
 	if (ipcdev.pdev == NULL) {
 		mutex_unlock(&ipclock);
+		pr_debug("%s:, ipcdev.pdev == NULL, returning %d\n",
+			__func__, -ENODEV);
 		return -ENODEV;
 	}
 
@@ -668,7 +670,14 @@ static int ipc_probe(struct pci_dev *dev, const struct pci_device_id *id)
 
 	pdata = (struct intel_scu_ipc_pdata_t *)id->driver_data;
 
+	if (dev)
+		pr_debug("%s: struct pci_dev dev == %p\n", __func__, dev);
+	else
+		pr_debug("%s: struct pci_dev dev == NULL\n", __func__);
+
 	ipcdev.pdev = pci_dev_get(dev);
+	if (ipcdev.pdev == NULL)
+		pr_debug("%s: pci_dev_get(dev) FAILED, ipcdev.pdev == NULL\n", __func__);	
 	ipcdev.irq_mode = pdata->irq_mode;
 
 	err = pci_enable_device(dev);
@@ -755,24 +764,25 @@ static int __init intel_scu_ipc_init(void)
 	int platform;		/* Platform type */
 
 	platform = intel_mid_identify_cpu();
-	if (platform == 0)
+	if (platform == 0) {
 		return -ENODEV;
-
+	}
+	/*
 	qos = kzalloc(sizeof(struct pm_qos_request), GFP_KERNEL);
 	if (!qos)
 		return -ENOMEM;
 
 	pm_qos_add_request(qos, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
-
+	*/
 	register_pm_notifier(&scu_ipc_pm_notifier);
-
 	return  pci_register_driver(&ipc_driver);
 }
 
 static void __exit intel_scu_ipc_exit(void)
 {
+/*
 	pm_qos_remove_request(qos);
-
+*/
 	pci_unregister_driver(&ipc_driver);
 }
 
@@ -780,5 +790,5 @@ MODULE_AUTHOR("Sreedhara DS <sreedhara.ds@intel.com>");
 MODULE_DESCRIPTION("Intel SCU IPC driver");
 MODULE_LICENSE("GPL");
 
-module_init(intel_scu_ipc_init);
+fs_initcall(intel_scu_ipc_init);
 module_exit(intel_scu_ipc_exit);

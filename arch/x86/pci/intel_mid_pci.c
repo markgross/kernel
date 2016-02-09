@@ -210,11 +210,29 @@ static int intel_mid_pci_irq_enable(struct pci_dev *dev)
 {
 	int polarity;
 
+	pr_debug("%s: dev->is_managed=%u, dev->irq_managed=%u, dev->irq=%u, \n",
+		__func__, dev->is_managed, dev->irq_managed, dev->irq);
 	if (dev->irq_managed && dev->irq > 0)
 		return 0;
 
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) {
 		polarity = 0; /* active high */
+		if (dev->irq == 0 && dev->device != PCI_DEVICE_ID_INTEL_MRFL_MMC) {
+			/* Test for 4.xLTS kernel PCI probe issue for 
+			 * "serial", "sdhci-pci", or "pwm-intel-mid" drivers
+			 * all three have irq == 0, but in 3.10 we only let MMC
+			 * (which is PCI vendor:device == 8086:1190)
+			 * have the IRQ == 0, so we'll get out for others and return 
+			 * error BUSY.
+			 */
+			pr_debug("%s: skipping PCI IRQ enable for dev->irq == 0 "
+				" and devices != PCI_DEVICE_ID_INTEL_MRFL_MMC "
+				"(there are some that share IRQ == 0, so we'll skip "
+				"the IRQ mapping of them on Merrifield\n",
+				__func__);
+			return 0;
+		}
+	}
 	else
 		polarity = 1; /* active low */
 
@@ -222,8 +240,10 @@ static int intel_mid_pci_irq_enable(struct pci_dev *dev)
 	 * MRST only have IOAPIC, the PCI irq lines are 1:1 mapped to
 	 * IOAPIC RTE entries, so we just enable RTE for the device.
 	 */
+	pr_debug("%s: dev->irq=%u, dev->pin=%u\n", __func__, dev->irq, dev->pin);
 	if (mp_set_gsi_attr(dev->irq, 1, polarity, dev_to_node(&dev->dev)))
 		return -EBUSY;
+
 	if (mp_map_gsi_to_irq(dev->irq, IOAPIC_MAP_ALLOC) < 0)
 		return -EBUSY;
 

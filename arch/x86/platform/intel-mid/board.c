@@ -141,7 +141,9 @@ struct devs_id __initconst device_ids[] = {
 					&ipc_device_handler},
 	{"bcove_adc", SFI_DEV_TYPE_IPC, 1, &bcove_adc_platform_data,
 					&ipc_device_handler},
-
+	/* IPC devices */
+	{"pmic_ccsm", SFI_DEV_TYPE_IPC, 1, &mrfl_pmic_ccsm_platform_data,
+					&ipc_device_handler},
 	/* I2C devices */
 	{"bq24192", SFI_DEV_TYPE_I2C, 1, &bq24192_platform_data},
 	{},

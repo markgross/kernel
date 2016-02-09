@@ -963,9 +963,11 @@ static void pci_read_irq(struct pci_dev *dev)
 	unsigned char irq;
 
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &irq);
+	pr_debug("%s: IRQ pin = %u\n", __func__, irq);
 	dev->pin = irq;
 	if (irq)
 		pci_read_config_byte(dev, PCI_INTERRUPT_LINE, &irq);
+	pr_debug("%s: set IRQ line = %u\n", __func__, irq);
 	dev->irq = irq;
 }
 
@@ -1149,6 +1151,8 @@ int pci_setup_device(struct pci_dev *dev)
 	case PCI_HEADER_TYPE_NORMAL:		    /* standard header */
 		if (class == PCI_CLASS_BRIDGE_PCI)
 			goto bad;
+		pr_debug("%s: dev->vendor=%04x, dev->device=%04x)\n",
+			__func__, dev?dev->vendor:0, dev?dev->device:0);
 		pci_read_irq(dev);
 		pci_read_bases(dev, 6, PCI_ROM_ADDRESS);
 		pci_read_config_word(dev, PCI_SUBSYSTEM_VENDOR_ID, &dev->subsystem_vendor);
@@ -1204,6 +1208,8 @@ int pci_setup_device(struct pci_dev *dev)
 		/* The PCI-to-PCI bridge spec requires that subtractive
 		   decoding (i.e. transparent) bridge must have programming
 		   interface code of 0x01. */
+		pr_debug("%s: dev->vendor=%04x, dev->device=%04x)\n",
+		                        __func__, dev?dev->vendor:0, dev?dev->device:0);
 		pci_read_irq(dev);
 		dev->transparent = ((dev->class & 0xff) == 1);
 		pci_read_bases(dev, 2, PCI_ROM_ADDRESS1);
@@ -1218,6 +1224,8 @@ int pci_setup_device(struct pci_dev *dev)
 	case PCI_HEADER_TYPE_CARDBUS:		    /* CardBus bridge header */
 		if (class != PCI_CLASS_BRIDGE_CARDBUS)
 			goto bad;
+		pr_debug("%s: dev->vendor=%04x, dev->device=%04x)\n",
+		                        __func__, dev?dev->vendor:0, dev?dev->device:0);
 		pci_read_irq(dev);
 		pci_read_bases(dev, 1, 0);
 		pci_read_config_word(dev, PCI_CB_SUBSYSTEM_VENDOR_ID, &dev->subsystem_vendor);
@@ -1561,13 +1569,18 @@ struct pci_dev *pci_scan_single_device(struct pci_bus *bus, int devfn)
 
 	dev = pci_get_slot(bus, devfn);
 	if (dev) {
+		pr_debug("%s: Getting pci slot failed for bus->name=\"%s\", "
+			"return dev=%d\n", __func__, bus?bus->name:"NULL", PTR_ERR(dev));
 		pci_dev_put(dev);
 		return dev;
 	}
 
 	dev = pci_scan_device(bus, devfn);
-	if (!dev)
+	if (!dev) {
+		pr_debug("%s: PCI device scan failed for bus->name=\"%s\", "
+			"returning NULL\n", __func__, bus?bus->name:"NULL");
 		return NULL;
+	}
 
 	pci_device_add(dev, bus);
 
@@ -1834,8 +1847,7 @@ unsigned int pci_scan_child_bus(struct pci_bus *bus)
 	unsigned int devfn, pass, max = bus->busn_res.start;
 	struct pci_dev *dev;
 
-	dev_dbg(&bus->dev, "scanning bus\n");
-
+	dev_err(&bus->dev, "scanning bus\n");
 	/* Go find them, Rover! */
 	for (devfn = 0; devfn < 0x100; devfn += 8)
 		pci_scan_slot(bus, devfn);
@@ -1848,7 +1860,7 @@ unsigned int pci_scan_child_bus(struct pci_bus *bus)
 	 * all PCI-to-PCI bridges on this bus.
 	 */
 	if (!bus->is_added) {
-		dev_dbg(&bus->dev, "fixups for bus\n");
+		dev_err(&bus->dev, "fixups for bus\n");
 		pcibios_fixup_bus(bus);
 		bus->is_added = 1;
 	}
@@ -1866,7 +1878,7 @@ unsigned int pci_scan_child_bus(struct pci_bus *bus)
 	 *
 	 * Return how far we've got finding sub-buses.
 	 */
-	dev_dbg(&bus->dev, "bus scan returning with max=%02x\n", max);
+	dev_err(&bus->dev, "bus scan returning with max=%02x\n", max);
 	return max;
 }
 EXPORT_SYMBOL_GPL(pci_scan_child_bus);
@@ -2016,7 +2028,7 @@ int pci_bus_insert_busn_res(struct pci_bus *b, int bus, int bus_max)
 	conflict = request_resource_conflict(parent_res, res);
 
 	if (conflict)
-		dev_printk(KERN_DEBUG, &b->dev,
+		dev_printk(KERN_INFO, &b->dev,
 			   "busn_res: can not insert %pR under %s%pR (conflicts with %s %pR)\n",
 			    res, pci_is_root_bus(b) ? "domain " : "",
 			    parent_res, conflict->name, conflict);

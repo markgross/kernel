@@ -603,6 +603,11 @@ struct dwc3_hwparams {
 /* HWPARAMS0 */
 #define DWC3_MODE(n)		((n) & 0x7)
 
+#define DWC3_MODE_DEVICE        0
+#define DWC3_MODE_HOST          1
+#define DWC3_MODE_DRD           2
+#define DWC3_MODE_HUB           3
+
 #define DWC3_MDWIDTH(n)		(((n) & 0xff00) >> 8)
 
 /* HWPARAMS1 */
@@ -789,6 +794,7 @@ struct dwc3 {
 	u32			u1u2;
 	u32			maximum_speed;
 	u32			revision;
+	u32                     mode;
 
 #define DWC3_REVISION_173A	0x5533173a
 #define DWC3_REVISION_175A	0x5533175a
@@ -1103,5 +1109,7 @@ static inline int dwc3_gadget_resume(struct dwc3 *dwc)
 	return 0;
 }
 #endif /* !IS_ENABLED(CONFIG_USB_DWC3_HOST) */
+
+void dwc3_event_buffers_cleanup(struct dwc3 *dwc);
 
 #endif /* __DRIVERS_USB_DWC3_CORE_H */

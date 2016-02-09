@@ -18,6 +18,8 @@
 #include "platform_pcal9555a.h"
 
 
+
+
 void __init *pcal9555a_platform_data(void *info)
 {
 	static struct pca953x_platform_data pcal9555a_pdata[PCAL9555A_NUM];
@@ -57,7 +59,7 @@ void __init *pcal9555a_platform_data(void *info)
 	if (gpio_base == -1)
 		return NULL;
 	pcal9555a->gpio_base = gpio_base;
-	if (intr != -1) {
+	if (intr >= 0) {
 		i2c_info->irq = intr + INTEL_MID_IRQ_OFFSET;
 		pcal9555a->irq_base = gpio_base + INTEL_MID_IRQ_OFFSET;
 	} else {
@@ -66,3 +68,37 @@ void __init *pcal9555a_platform_data(void *info)
 	}
 	return pcal9555a;
 }
+
+static const struct devs_id pcal9555a_1_dev_id __initconst = {
+	.name = "pcal9555a-1",
+	.type = SFI_DEV_TYPE_I2C,
+	.delay = 1,
+	.get_platform_data = &pcal9555a_platform_data,
+};
+
+static const struct devs_id pcal9555a_2_dev_id __initconst = {
+	.name = "pcal9555a-2",
+	.type = SFI_DEV_TYPE_I2C,
+	.delay = 1,
+	.get_platform_data = &pcal9555a_platform_data,
+};
+
+static const struct devs_id pcal9555a_3_dev_id __initconst = {
+	.name = "pcal9555a-3",
+	.type = SFI_DEV_TYPE_I2C,
+	.delay = 1,
+	.get_platform_data = &pcal9555a_platform_data,
+};
+
+static const struct devs_id pcal9555a_4_dev_id __initconst = {
+	.name = "pcal9555a-4",
+	.type = SFI_DEV_TYPE_I2C,
+	.delay = 1,
+	.get_platform_data = &pcal9555a_platform_data,
+};
+
+sfi_device(pcal9555a_1_dev_id);
+sfi_device(pcal9555a_2_dev_id);
+sfi_device(pcal9555a_3_dev_id);
+sfi_device(pcal9555a_4_dev_id);
+

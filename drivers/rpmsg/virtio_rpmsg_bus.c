@@ -713,8 +713,10 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 
 	/* grab a buffer */
 	msg = get_a_tx_buf(vrp);
-	if (!msg && !wait)
+	if (!msg && !wait) {
+		pr_debug("%s: return %d\n", __func__, -ENOMEM);
 		return -ENOMEM;
+	}
 
 	/* no free buffer ? wait for one (but bail after 15 seconds) */
 	while (!msg) {
@@ -748,7 +750,7 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	msg->reserved = 0;
 	memcpy(msg->data, data, len);
 
-	dev_dbg(dev, "TX From 0x%x, To 0x%x, Len %d, Flags %d, Reserved %d\n",
+	dev_err(dev, "TX From 0x%x, To 0x%x, Len %d, Flags %d, Reserved %d\n",
 					msg->src, msg->dst, msg->len,
 					msg->flags, msg->reserved);
 	print_hex_dump(KERN_DEBUG, "rpmsg_virtio TX: ", DUMP_PREFIX_NONE, 16, 1,
@@ -774,6 +776,7 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	virtqueue_kick(vrp->svq);
 out:
 	mutex_unlock(&vrp->tx_lock);
+	pr_debug("%s: return err=%d\n", __func__, err);
 	return err;
 }
 EXPORT_SYMBOL(rpmsg_send_offchannel_raw);
@@ -785,7 +788,7 @@ static int rpmsg_recv_single(struct virtproc_info *vrp, struct device *dev,
 	struct scatterlist sg;
 	int err;
 
-	dev_dbg(dev, "From: 0x%x, To: 0x%x, Len: %d, Flags: %d, Reserved: %d\n",
+	dev_err(dev, "From: 0x%x, To: 0x%x, Len: %d, Flags: %d, Reserved: %d\n",
 					msg->src, msg->dst, msg->len,
 					msg->flags, msg->reserved);
 	print_hex_dump(KERN_DEBUG, "rpmsg_virtio RX: ", DUMP_PREFIX_NONE, 16, 1,
@@ -855,6 +858,9 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 		return;
 	}
 
+	pr_debug("%s: msg->src=0x%x,msg->dst=0x%x,msg->reserved=%d,"
+		"msg->len=%d,msg->flags=%d,msg->data=0x%x\n",
+		__func__, msg->src, msg->dst, msg->reserved, msg->len, msg->flags, msg->data);
 	while (msg) {
 		err = rpmsg_recv_single(vrp, dev, msg, len);
 		if (err)
@@ -865,7 +871,7 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 		msg = virtqueue_get_buf(rvq, &len);
 	};
 
-	dev_dbg(dev, "Received %u messages\n", msgs_received);
+	dev_err(dev, "Received %u messages\n", msgs_received);
 
 	/* tell the remote processor we added another available rx buffer */
 	if (msgs_received)

@@ -251,7 +251,11 @@ static inline
 int rpmsg_send_offchannel(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 							void *data, int len)
 {
-	return rpmsg_send_offchannel_raw(rpdev, src, dst, data, len, true);
+	int ret;
+	pr_err("%s: calling rpmsg_send_offchannel_raw()\n", __func__);
+	ret = rpmsg_send_offchannel_raw(rpdev, src, dst, data, len, true);
+	pr_err("%s: called rpmsg_send_offchannel_raw(), ret=%d\n", __func__, ret);
+	return ret;
 }
 
 /**

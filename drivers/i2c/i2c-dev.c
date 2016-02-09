@@ -224,7 +224,7 @@ static int i2cdev_check_addr(struct i2c_adapter *adapter, unsigned int addr)
 {
 	struct i2c_adapter *parent = i2c_parent_is_i2c_adapter(adapter);
 	int result = 0;
-
+	
 	if (parent)
 		result = i2cdev_check_mux_parents(parent, addr);
 
@@ -345,7 +345,7 @@ static noinline int i2cdev_ioctl_smbus(struct i2c_client *client,
 	    (data_arg.size != I2C_SMBUS_I2C_BLOCK_BROKEN) &&
 	    (data_arg.size != I2C_SMBUS_I2C_BLOCK_DATA) &&
 	    (data_arg.size != I2C_SMBUS_BLOCK_PROC_CALL)) {
-		dev_dbg(&client->adapter->dev,
+		dev_err(&client->adapter->dev,
 			"size out of range (%x) in ioctl I2C_SMBUS.\n",
 			data_arg.size);
 		return -EINVAL;
@@ -354,7 +354,7 @@ static noinline int i2cdev_ioctl_smbus(struct i2c_client *client,
 	   so the check is valid if size==I2C_SMBUS_QUICK too. */
 	if ((data_arg.read_write != I2C_SMBUS_READ) &&
 	    (data_arg.read_write != I2C_SMBUS_WRITE)) {
-		dev_dbg(&client->adapter->dev,
+		dev_err(&client->adapter->dev,
 			"read_write out of range (%x) in ioctl I2C_SMBUS.\n",
 			data_arg.read_write);
 		return -EINVAL;
@@ -415,7 +415,7 @@ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct i2c_client *client = file->private_data;
 	unsigned long funcs;
 
-	dev_dbg(&client->adapter->dev, "ioctl, cmd=0x%02x, arg=0x%02lx\n",
+	dev_err(&client->adapter->dev, "ioctl, cmd=0x%02x, arg=0x%02lx\n",
 		cmd, arg);
 
 	switch (cmd) {
@@ -624,24 +624,32 @@ static int __init i2c_dev_init(void)
 	printk(KERN_INFO "i2c /dev entries driver\n");
 
 	res = register_chrdev(I2C_MAJOR, "i2c", &i2cdev_fops);
-	if (res)
+	if (res) {
+		pr_debug("%s: register_chrdev failed\n", __func__);
 		goto out;
+	}
 
 	i2c_dev_class = class_create(THIS_MODULE, "i2c-dev");
 	if (IS_ERR(i2c_dev_class)) {
 		res = PTR_ERR(i2c_dev_class);
+		pr_debug("%s: class create failed, error = %d\n", __func__, res);
 		goto out_unreg_chrdev;
 	}
 	i2c_dev_class->dev_groups = i2c_groups;
 
 	/* Keep track of adapters which will be added or removed later */
 	res = bus_register_notifier(&i2c_bus_type, &i2cdev_notifier);
-	if (res)
+	if (res) {
+		pr_debug("%s: bus register notifier failed, error = %d\n",
+			__func__, res);
 		goto out_unreg_class;
+	}
 
+	pr_debug("%s: calling i2c_for_each_dev()\n", __func__);
 	/* Bind to already existing adapters right away */
 	i2c_for_each_dev(NULL, i2cdev_attach_adapter);
 
+	pr_debug("%s: I2C bind successful, return 0\n", __func__);
 	return 0;
 
 out_unreg_class:

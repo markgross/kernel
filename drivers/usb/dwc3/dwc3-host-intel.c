@@ -49,7 +49,7 @@ static void xhci_dwc3_quirks(struct device *dev, struct xhci_hcd *xhci)
 	 * Synopsys DWC3 controller will generate PLC when link transfer to
 	 * compliance/loopback mode.
 	 */
-	xhci->quirks |= XHCI_PLAT | XHCI_COMP_PLC_QUIRK;
+	xhci->quirks |= XHCI_PLAT;
 }
 
 /* called during probe() after chip reset completes */
@@ -471,9 +471,6 @@ static int xhci_dwc_drv_probe(struct platform_device *pdev)
 
 	usb_put_phy(usb_phy);
 
-	/* Enable wakeup irq */
-	hcd->has_wakeup_irq = 1;
-
 	platform_set_drvdata(pdev, hcd);
 	pm_runtime_enable(hcd->self.controller);
 
@@ -502,7 +499,7 @@ static int xhci_dwc_drv_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_PM
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 /*
  * Do nothing in runtime pm callback.
  * On HVP platform, if make controller go to hibernation mode.
@@ -583,7 +580,7 @@ static int dwc_hcd_suspend_common(struct device *dev)
 			data |= GCTL_GBL_HIBERNATION_EN;
 			writel(data, hcd->regs + GCTL);
 			dev_dbg(hcd->self.controller, "set xhci hibernation enable!\n");
-			retval = xhci_suspend(xhci);
+			retval = xhci_suspend(xhci, device_may_wakeup(dev));
 		}
 
 		/* Check again in case wakeup raced with pci_suspend */

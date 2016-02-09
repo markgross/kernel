@@ -31,6 +31,8 @@
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/slot-gpio.h>
 
+#include <linux/intel_mid_pm.h>
+
 #include "sdhci.h"
 
 #define DRIVER_NAME "sdhci"
@@ -3662,7 +3664,7 @@ static int sdhci_mfld_panic_prepare(struct mmc_panic_host *panic_host)
 
 	sdhci_panic_reinit_host(panic_host);
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 	/*
 	 * disable runtime pm directly
 	 */
@@ -4170,6 +4172,7 @@ int sdhci_add_host(struct sdhci_host *host)
 		if (!host->ops->get_max_clock) {
 			pr_err("%s: Hardware doesn't specify base clock "
 			       "frequency.\n", mmc_hostname(mmc));
+			pr_debug("%s: return ret=%d\n", __func__, -ENODEV);
 			return -ENODEV;
 		}
 		host->max_clk = host->ops->get_max_clock(host);
@@ -4218,6 +4221,7 @@ int sdhci_add_host(struct sdhci_host *host)
 			} else {
 				pr_err("%s: Hardware doesn't specify timeout clock frequency.\n",
 					mmc_hostname(mmc));
+				pr_debug("%s: return ret=%d\n", __func__, -ENODEV);
 				return -ENODEV;
 			}
 		}
@@ -4273,8 +4277,16 @@ int sdhci_add_host(struct sdhci_host *host)
 		mmc->caps |= MMC_CAP_NEEDS_POLL;
 
 	/* If there are external regulators, get them */
-	if (mmc_regulator_get_supply(mmc) == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
+	if (mmc_regulator_get_supply(mmc) == -EPROBE_DEFER) {
+		if (PTR_ERR(mmc->supply.vqmmc) < 0 && 
+			boot_cpu_data.x86_model == INTEL_ATOM_MRFLD)
+			pr_debug("%s: Getting MMC regulator supply failed, return=%d.\n"
+				"For INTEL_ATOM_MRFLD this is not fatal, there is no vqmmc\n"
+				"regulator to find (we'll continue enabling MMC)\n",
+				__func__, -EPROBE_DEFER);
+		else
+			return -EPROBE_DEFER;
+	}
 
 	/* If vqmmc regulator and no 1.8V signalling, then there's no UHS */
 	if (!IS_ERR(mmc->supply.vqmmc)) {
@@ -4458,6 +4470,7 @@ int sdhci_add_host(struct sdhci_host *host)
 	if (mmc->ocr_avail == 0) {
 		pr_err("%s: Hardware doesn't report any "
 			"support voltages.\n", mmc_hostname(mmc));
+		pr_debug("%s: return ret=%d\n", __func__, -ENODEV);
 		return -ENODEV;
 	}
 
@@ -4537,8 +4550,13 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	sdhci_init(host, 0);
 
-	ret = request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
+	if (boot_cpu_data.x86_model == INTEL_ATOM_MRFLD)
+		ret = request_irq(host->irq, sdhci_irq, IRQF_SHARED,
+				mmc_hostname(mmc), host);
+	else 
+		ret = request_threaded_irq(host->irq, sdhci_irq, sdhci_thread_irq,
 				   IRQF_SHARED,	mmc_hostname(mmc), host);
+
 	if (ret) {
 		pr_err("%s: Failed to request IRQ %d: %d\n",
 		       mmc_hostname(mmc), host->irq, ret);

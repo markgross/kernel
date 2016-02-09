@@ -3359,7 +3359,7 @@ void dwc3_unregister_io_ebc(struct ebc_io *ebc)
 	list_del(&ebc->list);
 }
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static void dwc3_gadget_get_ep_state(struct dwc3 *dwc, struct dwc3_ep *dep)
 {
 	struct	dwc3_gadget_ep_cmd_params params;
@@ -3571,7 +3571,7 @@ int dwc3_runtime_resume(struct device *device)
 	dwc3_restore_hwregs(dwc);
 
 	dep = dwc->eps[0];
-	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false);
+	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false, false);
 	if (ret) {
 		dev_err(dwc->dev, "failed to enable %s during runtime resume\n",
 			dep->name);
@@ -3579,7 +3579,7 @@ int dwc3_runtime_resume(struct device *device)
 	}
 
 	dep = dwc->eps[1];
-	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false);
+	ret = __dwc3_gadget_ep_enable(dep, &dwc3_gadget_ep0_desc, NULL, false, false);
 	if (ret) {
 		dev_err(dwc->dev, "failed to enable %s during runtime resume\n",
 			dep->name);
@@ -3643,7 +3643,7 @@ int dwc3_runtime_resume(struct device *device)
 			dwc3_writel(dwc->regs, DWC3_DALEPENA, reg);
 
 			if (dep->flags_backup & DWC3_EP_STALL)
-				__dwc3_gadget_ep_set_halt(dep, 1);
+				__dwc3_gadget_ep_set_halt(dep, 1, false);
 
 			if (dep->flags_backup & DWC3_EP_BUSY) {
 				struct dwc3_request			*req;

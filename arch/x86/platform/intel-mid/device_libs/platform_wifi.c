@@ -132,3 +132,12 @@ void __init *wifi_platform_data(void *info)
 
 	return &wifi_device;
 }
+
+static const struct devs_id bcm43xx_clk_vmmc_dev_id __initconst = {
+	.name = "bcm43xx_clk_vmmc",
+	.type = SFI_DEV_TYPE_SD,
+	.delay = 0,
+	.get_platform_data = &wifi_platform_data,
+};
+
+sfi_device(bcm43xx_clk_vmmc_dev_id);

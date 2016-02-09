@@ -281,7 +281,7 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 	int local_trigger_count = atomic_read(&deferred_trigger_count);
 
 	atomic_inc(&probe_count);
-	pr_debug("bus: '%s': %s: probing driver %s with device %s\n",
+	pr_err("bus: '%s': %s: probing driver %s with device %s\n",
 		 drv->bus->name, __func__, drv->name, dev_name(dev));
 	WARN_ON(!list_empty(&dev->devres_head));
 
@@ -289,8 +289,11 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 
 	/* If using pinctrl, bind pins now before probing */
 	ret = pinctrl_bind_pins(dev);
-	if (ret)
+	if (ret) {
+		pr_debug("%s: drv->name=%s, bus=%s\n",
+			__func__, drv->name, dev_name(dev));
 		goto probe_failed;
+	}
 
 	if (driver_sysfs_add(dev)) {
 		printk(KERN_ERR "%s: driver_sysfs_add(%s) failed\n",
@@ -300,18 +303,31 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 
 	if (dev->pm_domain && dev->pm_domain->activate) {
 		ret = dev->pm_domain->activate(dev);
-		if (ret)
+		if (ret) {
+			pr_debug("%s: drv->name=%s, bus=%s\n",
+				__func__, drv->name, dev_name(dev));
 			goto probe_failed;
+		}
 	}
 
 	if (dev->bus->probe) {
+		pr_debug("%s: dev->init_name=%s, dev->bus->name=%s, "
+			"dev->bus->dev_name=%s, (mem address)dev->bus->probe=0x%p\n",
+			__func__, dev->init_name, dev->bus->name,
+			dev->bus->dev_name, dev->bus->probe);
 		ret = dev->bus->probe(dev);
-		if (ret)
+		if (ret) {
+			pr_debug("%s: probe failed, drv->name=%s, bus=%s, ret=%d\n",
+			        __func__, drv->name, dev_name(dev), ret);
 			goto probe_failed;
+		}
 	} else if (drv->probe) {
 		ret = drv->probe(dev);
-		if (ret)
+		if (ret) {
+			pr_debug("%s: probe failed, drv->name=%s, bus=%s\n",
+	                        __func__, drv->name, dev_name(dev));
 			goto probe_failed;
+		}
 	}
 
 	if (dev->pm_domain && dev->pm_domain->sync)
@@ -319,7 +335,7 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 
 	driver_bound(dev);
 	ret = 1;
-	pr_debug("bus: '%s': %s: bound device %s to driver %s\n",
+	pr_err("bus: '%s': %s: bound device %s to driver %s\n",
 		 drv->bus->name, __func__, dev_name(dev), drv->name);
 	goto done;
 
@@ -334,7 +350,7 @@ probe_failed:
 	switch (ret) {
 	case -EPROBE_DEFER:
 		/* Driver requested deferred probing */
-		dev_dbg(dev, "Driver %s requests probe deferral\n", drv->name);
+		dev_err(dev, "Driver %s requests probe deferral\n", drv->name);
 		driver_deferred_probe_add(dev);
 		/* Did a trigger occur while probing? Need to re-trigger if yes */
 		if (local_trigger_count != atomic_read(&deferred_trigger_count))
@@ -342,7 +358,7 @@ probe_failed:
 		break;
 	case -ENODEV:
 	case -ENXIO:
-		pr_debug("%s: probe of %s rejects match %d\n",
+		pr_err("%s: probe of %s rejects match %d\n",
 			 drv->name, dev_name(dev), ret);
 		break;
 	default:

@@ -241,7 +241,7 @@ static int pmic_write_reg(u16 addr, u8 *val)
 {
 	int ret;
 
-	ret = intel_scu_ipc_iowrite8(addr, val);
+	ret = intel_scu_ipc_iowrite8(addr, *val);
 	if (ret) {
 		dev_err(chc.dev,
 			"Error in intel_scu_ipc_ioread8 0x%.4x\n", addr);
@@ -1005,9 +1005,9 @@ int pmic_get_battery_voltage(int *vol)
 {
 	long tmp;
 	int ret;
-	u8 val;
+	u8 val = GPADCREG_VIBATT_REQ;
 
-	ret = pmic_write_reg(GPADCREQ_ADDR_BC, GPADCREG_VIBATT_REQ);
+	ret = pmic_write_reg(GPADCREQ_ADDR_BC, &val);
 	if (ret != 0) {
 		dev_err(chc.dev,
 			"Error writing GPADCREQ_ADDR_BC-register\n");
@@ -1038,7 +1038,7 @@ int pmic_get_battery_voltage(int *vol)
 	return 0;
 }
 
-static int get_charger_type()
+static int get_charger_type(void)
 {
 	int ret, i = 0;
 	u8 val;
@@ -1210,8 +1210,6 @@ static void handle_level0_interrupt(u8 int_reg, u8 stat_reg,
 static void handle_level1_interrupt(u8 int_reg, u8 stat_reg)
 {
 	int mask;
-	u8 usb_id_sts;
-	int ret;
 
 	if (!int_reg)
 		return;
@@ -1361,7 +1359,7 @@ static irqreturn_t pmic_thread_handler(int id, void *data)
 	list_add_tail(&evt->node, &chc.evt_queue);
 	mutex_unlock(&chc.evt_queue_lock);
 
-	queue_work(system_nrt_wq, &chc.evt_work);
+	schedule_work(&chc.evt_work);
 
 end:
 	/*clear first level IRQ */
@@ -1534,8 +1532,8 @@ static void set_pmic_batt_prof(struct ps_pse_mod_prof *new_prof,
 	int num_zones;
 	int split_index;
 	int i, j = 0;
-	short int temp_up_lim;
-	short int interval;
+	short int temp_up_lim = 0;
+	short int interval = 0;
 
 	if ((new_prof == NULL) || (bprof == NULL))
 		return;
@@ -1882,7 +1880,7 @@ static int pmic_chrgr_resume(struct device *dev)
 }
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int pmic_chrgr_runtime_suspend(struct device *dev)
 {
 	dev_dbg(dev, "%s called\n", __func__);

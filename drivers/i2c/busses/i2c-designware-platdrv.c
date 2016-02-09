@@ -39,11 +39,11 @@
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/platform_data/i2c-designware.h>
+#include <asm/intel-mid.h>
 #include "i2c-designware-core.h"
 
 static int dw_i2c_plat_suspend(struct device *dev)
 {
-	return clk_get_rate(dev->clk)/1000;
 	struct platform_device *pdev =
 		container_of(dev, struct platform_device, dev);
 	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
@@ -76,42 +76,6 @@ static void dw_i2c_acpi_params(struct platform_device *pdev, char method[],
 	kfree(buf.pointer);
 }
 
-static int dw_i2c_plat_runtime_suspend(struct device *dev)
-{
-	
-	const struct acpi_device_id *id;
-	struct platform_device *pdev =
-		container_of(dev, struct platform_device, dev);
-	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
-
-	dev_dbg(dev, "runtime suspend called\n");
-	i2c_dw_suspend(i2c, true);
-
-	dev->adapter.nr = -1;
-	dev->tx_fifo_depth = 32;
-	dev->rx_fifo_depth = 32;
-
-	/*
-	 * Try to get SDA hold time and *CNT values from an ACPI method if
-	 * it exists for both supported speed modes.
-	 */
-	dw_i2c_acpi_params(pdev, "SSCN", &dev->ss_hcnt, &dev->ss_lcnt, NULL);
-	dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
-			   &dev->sda_hold_time);
-
-	/*
-	 * Provide a way for Designware I2C host controllers that are not
-	 * based on Intel LPSS to specify their input clock frequency via
-	 * id->driver_data.
-	 */
-	id = acpi_match_device(pdev->dev.driver->acpi_match_table, &pdev->dev);
-	if (id && id->driver_data)
-		clk_register_fixed_rate(&pdev->dev, dev_name(&pdev->dev), NULL,
-					CLK_IS_ROOT, id->driver_data);
-
-	return 0;
-}
-
 static void dw_i2c_acpi_unconfigure(struct platform_device *pdev)
 {
 	struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
@@ -129,6 +93,54 @@ static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
 }
 static inline void dw_i2c_acpi_unconfigure(struct platform_device *pdev) { }
 #endif
+
+static int dw_i2c_plat_runtime_suspend(struct device *dev)
+{
+	
+	const struct acpi_device_id *id;
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
+
+	dev_err(dev, "runtime suspend called\n");
+	i2c_dw_suspend(i2c, true);
+
+	if (intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER) {
+		dev->adapter.nr = -1;
+		dev->tx_fifo_depth = 32;
+		dev->rx_fifo_depth = 32;
+
+		/*
+		 * Try to get SDA hold time and *CNT values from an ACPI method if
+		 * it exists for both supported speed modes.
+		 */
+		dw_i2c_acpi_params(pdev, "SSCN", &dev->ss_hcnt, &dev->ss_lcnt, NULL);
+		dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
+				   &dev->sda_hold_time);
+
+		/*
+		 * Provide a way for Designware I2C host controllers that are not
+		 * based on Intel LPSS to specify their input clock frequency via
+		 * id->driver_data.
+		 */
+		id = acpi_match_device(pdev->dev.driver->acpi_match_table, &pdev->dev);
+		if (id && id->driver_data)
+			clk_register_fixed_rate(&pdev->dev, dev_name(&pdev->dev), NULL,
+						CLK_IS_ROOT, id->driver_data);
+	}
+
+	return 0;
+}
+
+static int dw_i2c_plat_resume(struct device *dev)
+{
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
+
+	dev_err(dev, "resume called\n");
+	return i2c_dw_resume(i2c, false);
+}
 
 static int dw_i2c_plat_runtime_resume(struct device *dev)
 {
@@ -178,13 +190,13 @@ static int dw_i2c_probe(struct platform_device *pdev)
 	if (!mem) {
 		dev_err(&pdev->dev, "no mem resource?\n");
 		return -EINVAL;
-        }
-        start = mem->start;
-        len = resource_size(mem);
+	}
+	start = mem->start;
+	len = resource_size(mem);
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
-		dev_err(&pdev->dev, "no irq resource?\n")
+		dev_err(&pdev->dev, "no irq resource?\n");
 		return irq;
 	}
 
@@ -237,6 +249,7 @@ static struct platform_driver dw_i2c_driver = {
 	.remove = dw_i2c_remove,
 	.driver		= {
 		.name	= "i2c_designware",
+		.owner	= THIS_MODULE,
 		.pm     = &dw_i2c_plat_pm_ops,
 #ifdef CONFIG_ACPI
 		.acpi_match_table = ACPI_PTR(dw_i2c_acpi_ids),
@@ -260,7 +273,7 @@ static int __init dw_i2c_init_driver(void)
 		return 0;
 	}
 
-	return platform_driver_register(&dw_i2c_driver);
+	return platform_driver_probe(&dw_i2c_driver, dw_i2c_probe);
 }
 module_init(dw_i2c_init_driver);
 
