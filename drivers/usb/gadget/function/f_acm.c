@@ -740,9 +740,14 @@ static void acm_free_func(struct usb_function *f)
 	kfree(acm);
 }
 
+struct f_acm_opts {
+	struct usb_function_instance func_inst;
+	u8 port_num;
+};
+
 static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 {
-	struct f_serial_opts *opts;
+	struct f_acm_opts *opts;
 	struct f_acm *acm;
 
 	acm = kzalloc(sizeof(*acm), GFP_KERNEL);
@@ -763,7 +768,7 @@ static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 	acm->port.func.setup = acm_setup;
 	acm->port.func.disable = acm_disable;
 
-	opts = container_of(fi, struct f_serial_opts, func_inst);
+	opts = container_of(fi, struct f_acm_opts, func_inst);
 	acm->port_num = opts->port_num;
 	acm->port.func.unbind = acm_unbind;
 	acm->port.func.free_func = acm_free_func;
@@ -771,30 +776,30 @@ static struct usb_function *acm_alloc_func(struct usb_function_instance *fi)
 	return &acm->port.func;
 }
 
-static inline struct f_serial_opts *to_f_serial_opts(struct config_item *item)
+static inline struct f_acm_opts *to_f_acm_opts(struct config_item *item)
 {
-	return container_of(to_config_group(item), struct f_serial_opts,
+	return container_of(to_config_group(item), struct f_acm_opts,
 			func_inst.group);
 }
 
-CONFIGFS_ATTR_STRUCT(f_serial_opts);
+CONFIGFS_ATTR_STRUCT(f_acm_opts);
 static ssize_t f_acm_attr_show(struct config_item *item,
 				 struct configfs_attribute *attr,
 				 char *page)
 {
-	struct f_serial_opts *opts = to_f_serial_opts(item);
-	struct f_serial_opts_attribute *f_serial_opts_attr =
-		container_of(attr, struct f_serial_opts_attribute, attr);
+	struct f_acm_opts *opts = to_f_acm_opts(item);
+	struct f_acm_opts_attribute *f_acm_opts_attr =
+		container_of(attr, struct f_acm_opts_attribute, attr);
 	ssize_t ret = 0;
 
-	if (f_serial_opts_attr->show)
-		ret = f_serial_opts_attr->show(opts, page);
+	if (f_acm_opts_attr->show)
+		ret = f_acm_opts_attr->show(opts, page);
 	return ret;
 }
 
 static void acm_attr_release(struct config_item *item)
 {
-	struct f_serial_opts *opts = to_f_serial_opts(item);
+	struct f_acm_opts *opts = to_f_acm_opts(item);
 
 	usb_put_function_instance(&opts->func_inst);
 }
@@ -804,12 +809,12 @@ static struct configfs_item_operations acm_item_ops = {
 	.show_attribute		= f_acm_attr_show,
 };
 
-static ssize_t f_acm_port_num_show(struct f_serial_opts *opts, char *page)
+static ssize_t f_acm_port_num_show(struct f_acm_opts *opts, char *page)
 {
 	return sprintf(page, "%u\n", opts->port_num);
 }
 
-static struct f_serial_opts_attribute f_acm_port_num =
+static struct f_acm_opts_attribute f_acm_port_num =
 	__CONFIGFS_ATTR_RO(port_num, f_acm_port_num_show);
 
 
@@ -826,16 +831,16 @@ static struct config_item_type acm_func_type = {
 
 static void acm_free_instance(struct usb_function_instance *fi)
 {
-	struct f_serial_opts *opts;
+	struct f_acm_opts *opts;
 
-	opts = container_of(fi, struct f_serial_opts, func_inst);
+	opts = container_of(fi, struct f_acm_opts, func_inst);
 	gserial_free_line(opts->port_num);
 	kfree(opts);
 }
 
 static struct usb_function_instance *acm_alloc_instance(void)
 {
-	struct f_serial_opts *opts;
+	struct f_acm_opts *opts;
 	int ret;
 
 	opts = kzalloc(sizeof(*opts), GFP_KERNEL);
