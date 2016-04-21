@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 
 #include <asm/intel_scu_ipc.h>
+#include <asm/intel_scu_pmic.h>
 
 #define MSIC_VENDOR(id)		((id >> 6) & 3)
 #define MSIC_VERSION(id)	(id & 0x3f)

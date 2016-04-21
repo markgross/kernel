@@ -27,6 +27,21 @@
 #include <linux/module.h>
 #include <asm/intel-mid.h>
 #include <asm/intel_scu_ipc.h>
+#include <linux/pm_qos.h>
+#include <linux/intel_mid_pm.h>
+#include <linux/kernel.h>
+#include <linux/bitops.h>
+#include <linux/sched.h>
+#include <linux/atomic.h>
+#include <linux/notifier.h>
+#include <linux/suspend.h>
+
+enum {
+	SCU_IPC_LINCROFT,
+	SCU_IPC_PENWELL,
+	SCU_IPC_CLOVERVIEW,
+	SCU_IPC_TANGIER,
+};
 
 /* IPC defines the following message types */
 #define IPCMSG_WATCHDOG_TIMER 0xF8 /* Set Kernel Watchdog Threshold */
@@ -66,6 +81,15 @@
 #define PCI_DEVICE_ID_CLOVERVIEW	0x08ea
 #define PCI_DEVICE_ID_TANGIER		0x11a0
 
+static int  scu_ipc_pm_callback(struct notifier_block *nb,
+					unsigned long action,
+					void *ignored);
+
+static struct notifier_block scu_ipc_pm_notifier = {
+	.notifier_call = scu_ipc_pm_callback,
+	.priority = 1,
+};
+
 /* intel scu ipc driver data */
 struct intel_scu_ipc_pdata_t {
 	u32 i2c_base;
@@ -92,15 +116,7 @@ static struct intel_scu_ipc_pdata_t intel_scu_ipc_tangier_pdata = {
 	.irq_mode = 0,
 };
 
-struct intel_scu_ipc_dev {
-	struct device *dev;
-	void __iomem *ipc_base;
-	void __iomem *i2c_base;
-	struct completion cmd_complete;
-	u8 irq_mode;
-};
-
-static struct intel_scu_ipc_dev  ipcdev; /* Only one for now */
+static struct intel_scu_ipc_dev ipcdev; /* Only one for now */
 
 /*
  * IPC Read Buffer (Read Only):
@@ -113,6 +129,44 @@ static struct intel_scu_ipc_dev  ipcdev; /* Only one for now */
 #define I2C_DATA_ADDR		0x04
 
 static DEFINE_MUTEX(ipclock); /* lock used to prevent multiple call to SCU */
+
+/* PM Qos struct */
+static struct pm_qos_request *qos;
+
+/* Suspend status*/
+static bool suspend_status;
+static DEFINE_MUTEX(scu_suspend_lock);
+
+/* Suspend status get */
+bool suspend_in_progress(void)
+{
+	return suspend_status;
+}
+
+/* Suspend status set */
+void set_suspend_status(bool status)
+{
+	mutex_lock(&scu_suspend_lock);
+	suspend_status = status;
+	mutex_unlock(&scu_suspend_lock);
+}
+
+/* IPC PM notifier callback */
+static int scu_ipc_pm_callback(struct notifier_block *nb,
+					unsigned long action,
+					void *ignored)
+{
+	switch (action) {
+	case PM_SUSPEND_PREPARE:
+		set_suspend_status(true);
+		return NOTIFY_OK;
+	case PM_POST_SUSPEND:
+		set_suspend_status(false);
+		return NOTIFY_OK;
+	}
+
+	return NOTIFY_DONE;
+}
 
 /*
  * Send ipc command
@@ -138,7 +192,7 @@ static inline void ipc_command(struct intel_scu_ipc_dev *scu, u32 cmd)
  */
 static inline void ipc_data_writel(struct intel_scu_ipc_dev *scu, u32 data, u32 offset)
 {
-	writel(data, scu->ipc_base + 0x80 + offset);
+	writel(data, scu->ipc_base + IPC_WRITE_BUFFER + offset);
 }
 
 /*
@@ -150,7 +204,7 @@ static inline void ipc_data_writel(struct intel_scu_ipc_dev *scu, u32 data, u32 
  */
 static inline u8 ipc_read_status(struct intel_scu_ipc_dev *scu)
 {
-	return __raw_readl(scu->ipc_base + 0x04);
+	return __raw_readl(scu->ipc_base + IPC_STATUS_ADDR);
 }
 
 /* Read ipc byte data */
@@ -205,7 +259,7 @@ static inline int ipc_wait_for_interrupt(struct intel_scu_ipc_dev *scu)
 	return 0;
 }
 
-static int intel_scu_ipc_check_status(struct intel_scu_ipc_dev *scu)
+int intel_scu_ipc_check_status(struct intel_scu_ipc_dev *scu)
 {
 	return scu->irq_mode ? ipc_wait_for_interrupt(scu) : busy_loop(scu);
 }
@@ -261,6 +315,27 @@ static int pwr_reg_rdwr(u16 *addr, u8 *data, u32 count, u32 op, u32 id)
 	mutex_unlock(&ipclock);
 	return err;
 }
+
+void intel_scu_ipc_lock(void)
+{
+	/* Prevent C-states beyond C6 */
+	pm_qos_update_request(qos, CSTATE_EXIT_LATENCY_S0i1 - 1);
+
+	/* Prevent S3 */
+	mutex_lock(&scu_suspend_lock);
+
+}
+EXPORT_SYMBOL_GPL(intel_scu_ipc_lock);
+
+void intel_scu_ipc_unlock(void)
+{
+        /* Re-enable S3 */
+        mutex_unlock(&scu_suspend_lock);
+
+        /* Re-enable Deeper C-states beyond C6 */
+        pm_qos_update_request(qos, PM_QOS_DEFAULT_VALUE);
+}
+EXPORT_SYMBOL_GPL(intel_scu_ipc_unlock);
 
 /**
  *	intel_scu_ipc_ioread8		-	read a word via the SCU
@@ -491,6 +566,80 @@ int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
 	return err;
 }
 EXPORT_SYMBOL(intel_scu_ipc_command);
+
+/**
+ * intel_scu_ipc_raw_cmd - raw ipc command with data
+ * @cmd: command
+ * @sub: sub type
+ * @in: input data
+ * @inlen: input length in bytes
+ * @out: output data
+ * @outlen: output length in dwords
+ * @sptr: data writing to SPTR register
+ * @dptr: data writing to DPTR register
+ * Issue a command to the SCU which involves data transfers. Do the
+ * data copies under the lock but leave it for the caller to interpret
+ */
+int intel_scu_ipc_raw_cmd(u32 cmd, u32 sub, u32 *in, u32 inlen, u32 *out,
+		u32 outlen, u32 dptr, u32 sptr)
+{
+	struct intel_scu_ipc_dev *scu;
+	int i, err;
+	u32 wbuf[4] = { 0 };
+
+	if (ipcdev.dev == NULL)
+		return -ENODEV;
+
+	if (inlen > 16)
+		return -EINVAL;
+
+	mutex_lock(&ipclock);
+	scu = &ipcdev;
+	memcpy(wbuf, (u8 *)in, inlen);
+
+	writel(dptr, ipcdev.ipc_base + IPC_DPTR_ADDR);
+	writel(sptr, ipcdev.ipc_base + IPC_SPTR_ADDR);
+
+	/**
+	 * SRAM controller doesn't support 8bit write, it only supports
+	 * 32bit write, so we have to write into the WBUF in 32bit,
+	 * and SCU FW will use the inlen to determine the actual input
+	 * data length in the WBUF.
+	 */
+	for (i = 0; i < ((inlen + 3) / 4); i++)
+		ipc_data_writel(scu, wbuf[i], 4 * i);
+
+	/**
+	 * Watchdog IPC command is an exception here using double word
+	 * as the unit of input data size because of historical reasons
+	 * and SCU FW is doing so.
+	 */
+	if ((cmd & 0xFF) == IPCMSG_WATCHDOG_TIMER)
+		inlen = (inlen + 3) / 4;
+	/*
+	 *  In case of 3 pmic writes or read-modify-writes
+	 *  there are holes in the middle of the buffer which are
+	 *  ignored by SCU. These bytes should not be included into
+	 *  size of the ipc msg. Holes are as follows:
+	 *  write: wbuf[6 & 7]
+	 *  read-modifu-write: wbuf[6 & 7 & 11]
+	 */
+	else if ((cmd & 0xFF) == IPCMSG_PCNTRL) {
+		if (sub == IPC_CMD_PCNTRL_W && inlen == 11)
+			inlen -= 2;
+		else if (sub == IPC_CMD_PCNTRL_M && inlen == 15)
+			inlen -= 3;
+	}
+	ipc_command(scu, (inlen << 16) | (sub << 12) | cmd);
+	err = intel_scu_ipc_check_status(scu);
+
+	for (i = 0; i < outlen; i++)
+		*out++ = ipc_data_readl(scu, 4 * i);
+
+	mutex_unlock(&ipclock);
+	return err;
+}
+EXPORT_SYMBOL_GPL(intel_scu_ipc_raw_cmd);
 
 /* I2C commands */
 #define IPC_I2C_WRITE 1 /* I2C Write command */

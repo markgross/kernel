@@ -269,6 +269,7 @@ struct mmc_host {
 	u32			caps2;		/* More host capabilities */
 
 #define MMC_CAP2_BOOTPART_NOACC	(1 << 0)	/* Boot partition no access */
+#define MMC_CAP2_CACHE_CTRL     (1 << 1)        /* Allow cache control */
 #define MMC_CAP2_FULL_PWR_CYCLE	(1 << 2)	/* Can do full power cycle */
 #define MMC_CAP2_HS200_1_8V_SDR	(1 << 5)        /* can support */
 #define MMC_CAP2_HS200_1_2V_SDR	(1 << 6)        /* can support */
@@ -288,7 +289,17 @@ struct mmc_host {
 				 MMC_CAP2_HS400_1_2V)
 #define MMC_CAP2_HSX00_1_2V	(MMC_CAP2_HS200_1_2V_SDR | MMC_CAP2_HS400_1_2V)
 #define MMC_CAP2_SDIO_IRQ_NOTHREAD (1 << 17)
-#define MMC_CAP2_NO_WRITE_PROTECT (1 << 18)	/* No physical write protect pin, assume that card is always read-write */
+#define MMC_CAP2_NO_WRITE_PROTECT (1 << 18)    /* No physical write protect pin, assume that card is always read-write */
+#define MMC_CAP2_INIT_CARD_SYNC (1 << 15)       /* init card in sync mode */
+#define MMC_CAP2_POLL_R1B_BUSY  (1 << 16)       /* host poll R1B busy*/
+#define MMC_CAP2_RPMBPART_NOACC (1 << 17)       /* RPMB partition no access */
+#define MMC_CAP2_LED_SUPPORT    (1 << 18)       /* led support */
+#define MMC_CAP2_PWCTRL_POWER   (1 << 19)       /* power control card power */
+#define MMC_CAP2_FIXED_NCRC     (1 << 20)       /* fixed NCRC */
+#define MMC_CAP2_HS200_WA       (1 << 21)       /* WA: 100MHz clock in HS200 */
+#define MMC_CAP2_HS400_1_8V_DDR (1 << 22)       /* support HS400 */
+#define MMC_CAP2_HS400_1_2V_DDR (1 << 23)       /* support HS400 */
+
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 

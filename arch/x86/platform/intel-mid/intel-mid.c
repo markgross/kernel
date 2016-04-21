@@ -11,6 +11,7 @@
  * of the License.
  */
 
+#define        SFI_SIG_OEM0    "OEM0"
 #define pr_fmt(fmt) "intel_mid: " fmt
 
 #include <linux/init.h>
@@ -21,6 +22,7 @@
 #include <linux/irq.h>
 #include <linux/module.h>
 #include <linux/notifier.h>
+#include <linux/spinlock.h>
 
 #include <asm/setup.h>
 #include <asm/mpspec_def.h>
@@ -32,6 +34,7 @@
 #include <asm/io.h>
 #include <asm/i8259.h>
 #include <asm/intel_scu_ipc.h>
+#include <asm/intel_mid_rpmsg.h>
 #include <asm/apb_timer.h>
 #include <asm/reboot.h>
 
@@ -62,7 +65,7 @@
 enum intel_mid_timer_options intel_mid_timer_options;
 
 /* intel_mid_ops to store sub arch ops */
-static struct intel_mid_ops *intel_mid_ops;
+struct intel_mid_ops *intel_mid_ops;
 /* getter function for sub arch ops*/
 static void *(*get_intel_mid_ops[])(void) = INTEL_MID_OPS_INIT;
 enum intel_mid_cpu_type __intel_mid_cpu_chip;

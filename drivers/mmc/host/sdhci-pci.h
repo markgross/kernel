@@ -47,6 +47,7 @@
 #define  PCI_SLOT_INFO_FIRST_BAR_MASK	0x07
 
 #define MAX_SLOTS			8
+#define IPC_EMMC_MUTEX_CMD             0xEE
 
 struct sdhci_pci_chip;
 struct sdhci_pci_slot;
@@ -75,6 +76,9 @@ struct sdhci_pci_slot {
 	int			rst_n_gpio;
 	int			cd_gpio;
 	int			cd_irq;
+	bool                    dev_power;
+	struct mutex            power_lock;
+	bool                    dma_enabled;
 
 	char			*cd_con_id;
 	int			cd_idx;

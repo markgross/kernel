@@ -28,6 +28,12 @@
 #include <linux/mmc/slot-gpio.h>
 #include <linux/mmc/sdhci-pci-data.h>
 
+#include <asm/intel_mid_rpmsg.h>
+
+#if defined(CONFIG_X86_MDFLD)
+#include <linux/intel_mid_pm.h>
+#endif
+
 #include "sdhci.h"
 #include "sdhci-pci.h"
 #include "sdhci-pci-o2micro.h"
@@ -203,6 +209,46 @@ static inline void sdhci_pci_remove_own_cd(struct sdhci_pci_slot *slot)
 }
 
 #endif
+
+#define MFD_SDHCI_DEKKER_BASE  0xffff7fb0
+static void mfd_emmc_mutex_register(struct sdhci_pci_slot *slot)
+{
+	u32 mutex_var_addr;
+#ifdef CONFIG_INTEL_SCU_IPC
+	int err;
+
+	err = rpmsg_send_generic_command(IPC_EMMC_MUTEX_CMD, 0,
+			NULL, 0, &mutex_var_addr, 1);
+	if (err) {
+		dev_err(&slot->chip->pdev->dev, "IPC error: %d\n", err);
+		dev_info(&slot->chip->pdev->dev, "Specify mutex address\n");
+		/*
+		 * Since we failed to get mutex sram address, specify it
+		 */
+		mutex_var_addr = MFD_SDHCI_DEKKER_BASE;
+	}
+#else
+	mutex_var_addr = MFD_SDHCI_DEKKER_BASE;
+#endif
+
+	/* 3 housekeeping mutex variables, 12 bytes length */
+	slot->host->sram_addr = ioremap_nocache(mutex_var_addr,
+			3 * sizeof(u32));
+	if (!slot->host->sram_addr)
+		dev_err(&slot->chip->pdev->dev, "ioremap failed!\n");
+	else {
+		dev_info(&slot->chip->pdev->dev, "mapped addr: %p\n",
+				slot->host->sram_addr);
+		dev_info(&slot->chip->pdev->dev,
+		"current eMMC owner: %d, IA req: %d, SCU req: %d\n",
+				readl(slot->host->sram_addr +
+					DEKKER_EMMC_OWNER_OFFSET),
+				readl(slot->host->sram_addr +
+					DEKKER_IA_REQ_OFFSET),
+				readl(slot->host->sram_addr +
+					DEKKER_SCU_REQ_OFFSET));
+	}
+}
 
 static int mfd_emmc_probe_slot(struct sdhci_pci_slot *slot)
 {
@@ -418,7 +464,6 @@ static const struct sdhci_pci_fixes sdhci_intel_byt_sd = {
 			SDHCI_QUIRK2_POWER_PIN_GPIO_MODE,
 	.allow_runtime_pm = true,
 	.probe_slot	= byt_sd_probe_slot,
-	.remove_slot	= byt_sd_remove_slot,
 };
 
 #define TNG_IOAPIC_IDX	0xfec00000
@@ -444,7 +489,6 @@ static int intel_mrfl_mmc_probe_slot(struct sdhci_pci_slot *slot)
 
 	switch (PCI_FUNC(slot->chip->pdev->devfn)) {
 	case INTEL_MRFL_EMMC_0:
-		sdhci_alloc_panic_host(slot->host);
 		slot->host->mmc->caps |= MMC_CAP_8_BIT_DATA |
 					MMC_CAP_NONREMOVABLE |
 					MMC_CAP_1_8V_DDR;
@@ -454,7 +498,7 @@ static int intel_mrfl_mmc_probe_slot(struct sdhci_pci_slot *slot)
 		if (slot->chip->pdev->revision == 0x1) { /* B0 stepping */
 			slot->host->mmc->caps2 |= MMC_CAP2_HS200_1_8V_SDR;
 			/* WA for async abort silicon issue */
-			slot->host->quirks2 |= SDHCI_QUIRK2_CARD_CD_DELAY |
+			slot->host->quirks2 |=  SDHCI_QUIRK2_2MS_DELAY |
 					SDHCI_QUIRK2_WAIT_FOR_IDLE;
 		}
 		mrfl_ioapic_rte_reg_addr_map(slot);
@@ -1462,6 +1506,8 @@ static void sdhci_pci_gpio_hw_reset(struct sdhci_host *host)
 {
 	struct sdhci_pci_slot *slot = sdhci_priv(host);
 	int rst_n_gpio = slot->rst_n_gpio;
+	u8 pwr;
+
 	if (gpio_is_valid(rst_n_gpio)) {
 		gpio_set_value_cansleep(rst_n_gpio, 0);
 		/* For eMMC, minimum is 1us but give it 10us for good measure */
@@ -1561,7 +1607,7 @@ static int sdhci_pci_get_tuning_count(struct sdhci_host *host)
 	int tuning_count = 0;
 
 	switch (slot->chip->pdev->device) {
-	case PCI_DEVICE_ID_INTEL_BYT_EMMC45:
+	case PCI_DEVICE_ID_INTEL_BYT_EMMC2:
 		tuning_count = 4; /* using 8 seconds, this can be tuning */
 	case PCI_DEVICE_ID_INTEL_MRFL_MMC:
 		tuning_count = 4; /* using 8 seconds, this can be tuning */
