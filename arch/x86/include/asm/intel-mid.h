@@ -12,7 +12,32 @@
 #define _ASM_X86_INTEL_MID_H
 
 #include <linux/sfi.h>
+#include <linux/pci.h>
 #include <linux/platform_device.h>
+#include <asm/intel_mid_pcihelpers.h>
+
+#define INTEL_MID_SSN_SIZE     32
+
+
+/*
+ * Access to message bus through three registers
+ * in CUNIT(0:0:0) PCI configuration space.
+ * MSGBUS_CTRL_REG(0xD0):
+ *   31:24	= message bus opcode
+ *   23:16	= message bus port
+ *   15:8	= message bus address, low 8 bits.
+ *   7:4	= message bus byte enables
+ * MSGBUS_CTRL_EXT_REG(0xD8):
+ *   31:8	= message bus address, high 24 bits.
+ * MSGBUS_DATA_REG(0xD4):
+ *   hold the data for write or read
+ */
+#define PCI_ROOT_MSGBUS_CTRL_REG	0xD0
+#define PCI_ROOT_MSGBUS_DATA_REG	0xD4
+#define PCI_ROOT_MSGBUS_CTRL_EXT_REG	0xD8
+#define PCI_ROOT_MSGBUS_READ		0x10
+#define PCI_ROOT_MSGBUS_WRITE		0x11
+#define PCI_ROOT_MSGBUS_DWORD_ENABLE	0xf0
 
 extern int intel_mid_pci_init(void);
 extern int get_gpio_by_name(const char *name);
@@ -22,6 +47,42 @@ extern int __init sfi_parse_mtmr(struct sfi_table_header *table);
 extern int sfi_mrtc_num;
 extern struct sfi_rtc_table_entry sfi_mrtc_array[];
 
+/* Define soft platform ID to comply with the OEMB table format. But SPID is not supported */
+#define INTEL_PLATFORM_SSN_SIZE 32
+struct soft_platform_id {
+        u16 customer_id; /*Defines the final customer for the product */
+        u16 vendor_id; /* Defines who owns the final product delivery */
+        u16 manufacturer_id; /* Defines who build the hardware. This can be
+                              * different for the same product */
+        u16 platform_family_id; /* Defined by vendor and defines the family of
+                                 * the product with the same root components */
+        u16 product_line_id; /* Defined by vendor and defines the name of the
+                              * product. This can be used to differentiate the
+                              * feature set for the same product family (low
+                              * cost vs full feature). */
+        u16 hardware_id; /* Defined by vendor and defines the physical hardware
+                          * component set present on the PCB/FAB */
+        u8  fru[SPID_FRU_SIZE]; /* Field Replaceabl Unit */
+} __packed;
+
+/* OEMB table */
+struct sfi_table_oemb {
+	struct sfi_table_header header;
+	u32 board_id;
+	u32 board_fab;
+	u8 iafw_major_version;
+	u8 iafw_main_version;
+	u8 val_hooks_major_version;
+	u8 val_hooks_minor_version;
+	u8 ia_suppfw_major_version;
+	u8 ia_suppfw_minor_version;
+	u8 scu_runtime_major_version;
+	u8 scu_runtime_minor_version;
+	u8 ifwi_major_version;
+	u8 ifwi_minor_version;
+	struct soft_platform_id spid;
+	u8 ssn[INTEL_MID_SSN_SIZE];
+} __packed;
 /*
  * Here defines the array of devices platform data that IAFW would export
  * through SFI "DEVS" table, we use name and type to match the device and
@@ -112,6 +173,15 @@ enum intel_mid_timer_options {
 };
 
 extern enum intel_mid_timer_options intel_mid_timer_options;
+
+#define spid_attr(_name) \
+static struct kobj_attribute _name##_attr = { \
+	.attr = {                             \
+		.name = __stringify(_name),   \
+		.mode = 0444,                 \
+	},                                    \
+	.show   = _name##_show,               \
+}
 
 /*
  * Penwell uses spread spectrum clock, so the freq number is not exactly
