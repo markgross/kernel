@@ -39,6 +39,9 @@
 #define INTEL_MID_IRQ_TYPE_EDGE		(1 << 0)
 #define INTEL_MID_IRQ_TYPE_LEVEL	(1 << 1)
 
+#define TANGIER_I2C_FLIS_START	0x1D00
+#define TANGIER_I2C_FLIS_END	0x1D34
+
 #define to_lnw_priv(chip)       container_of(chip, struct intel_mid_gpio, chip)
 
 /*
@@ -148,6 +151,18 @@ static struct gpio_flis_pair gpio_flis_mapping_table[] = {
        { 190,  0x2D50 },
 };
 
+/*
+ * In new version of FW for Merrifield, I2C FLIS register can not
+ * be written directly but go though a IPC way which is sleepable,
+ * so we shouldn't use spin_lock_irq to protect the access when
+ * is_merr_i2c_flis() return true.
+ */
+static inline bool is_merr_i2c_flis(u32 offset)
+{
+	return ((offset >= TANGIER_I2C_FLIS_START)
+		&& (offset <= TANGIER_I2C_FLIS_END));
+}
+
 static u32 get_flis_offset_by_gpio(int gpio)
 {
        int i;
@@ -211,33 +226,34 @@ void lnw_gpio_set_alt(int gpio, int alt)
                return;
        }
 #endif
-       gpio -= lnw->chip.base;
+	gpio -= lnw->chip.base;
 
-       if (lnw->type != TANGIER_GPIO) {
-               reg = gpio / 16;
-               bit = gpio % 16;
+	if (lnw->type != TANGIER_GPIO) {
+		reg = gpio / 16;
+		bit = gpio % 16;
 
-               mem = gpio_reg(&lnw->chip, 0, GAFR);
-               spin_lock_irqsave(&lnw->lock, flags);
-               value = readl(mem + reg);
-               value &= ~(3 << (bit * 2));
-               value |= (alt & 3) << (bit * 2);
-               writel(value, mem + reg);
-               spin_unlock_irqrestore(&lnw->lock, flags);
-               dev_dbg(lnw->chip.dev, "ALT: writing 0x%x to %p\n",
-                       value, mem + reg);
-       } else {
-               offset = lnw->get_flis_offset(gpio);
-               if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
+		mem = gpio_reg(&lnw->chip, 0, GAFR);
+		spin_lock_irqsave(&lnw->lock, flags);
+		value = readl(mem + reg);
+		value &= ~(3 << (bit * 2));
+		value |= (alt & 3) << (bit * 2);
+		writel(value, mem + reg);
+		spin_unlock_irqrestore(&lnw->lock, flags);
+		dev_dbg(lnw->chip.dev, "ALT: writing 0x%x to %p\n",
+			value, mem + reg);
+	} else {
+		offset = lnw->get_flis_offset(gpio);
+		if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
                        return;
-
-               spin_lock_irqsave(&lnw->lock, flags);
-               value = get_flis_value(offset);
-               value &= ~7;
-               value |= (alt & 7);
-               set_flis_value(value, offset);
-               spin_unlock_irqrestore(&lnw->lock, flags);
-       }
+		if (!is_merr_i2c_flis(offset))
+			spin_lock_irqsave(&lnw->lock, flags);
+		value = get_flis_value(offset);
+		value &= ~7;
+		value |= (alt & 7);
+		set_flis_value(value, offset);
+		if (!is_merr_i2c_flis(offset))
+			spin_unlock_irqrestore(&lnw->lock, flags);
+	}
 }
 EXPORT_SYMBOL_GPL(lnw_gpio_set_alt);
 
@@ -364,6 +380,7 @@ static int lnw_gpio_set_pull(struct gpio_chip *chip, unsigned gpio, int value)
 {
 	u32 flis_offset, flis_value;
 	struct intel_mid_gpio *lnw = to_lnw_priv(chip);
+	unsigned long flags;
 
 	if (lnw->type != TANGIER_GPIO)
 		return 0;
@@ -371,8 +388,9 @@ static int lnw_gpio_set_pull(struct gpio_chip *chip, unsigned gpio, int value)
 	flis_offset = lnw->get_flis_offset(gpio);
 	if (WARN(flis_offset == -EINVAL, "invalid pin %d\n", gpio))
 		return -EINVAL;
-	if (flis_offset >= I2C_FLIS_START && flis_offset <= I2C_FLIS_END)
+	if (is_merr_i2c_flis(flis_offset))
 		return 0;
+	spin_lock_irqsave(&lnw->lock, flags);
 	flis_value = get_flis_value(flis_offset);
 	if (value) {
 		flis_value |= PULLUP_ENABLE;
@@ -383,6 +401,7 @@ static int lnw_gpio_set_pull(struct gpio_chip *chip, unsigned gpio, int value)
 	}
 	flis_value |= PUPD_VAL_50K;
 	set_flis_value(flis_value, flis_offset);
+	spin_unlock_irqrestore(&lnw->lock, flags);
 
 	return 0;
 }
@@ -755,18 +774,21 @@ static int flis_set_normal(struct gpio_control *control, void *private_data,
        unsigned long flags;
 
        if (lnw->type == TANGIER_GPIO) {
-               offset = lnw->get_flis_offset(gpio);
-               if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
+		offset = lnw->get_flis_offset(gpio);
+		if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
                        return -1;
+		if (!is_merr_i2c_flis(offset))
+	               spin_lock_irqsave(&lnw->lock, flags);
 
-               spin_lock_irqsave(&lnw->lock, flags);
-               value = get_flis_value(offset);
-               value &= ~(mask << shift);
-               value |= ((num & mask) << shift);
-               set_flis_value(value, offset);
-               spin_unlock_irqrestore(&lnw->lock, flags);
+		value = get_flis_value(offset);
+		value &= ~(mask << shift);
+		value |= ((num & mask) << shift);
+		set_flis_value(value, offset);
 
-               return 0;
+		if (!is_merr_i2c_flis(offset))
+			spin_unlock_irqrestore(&lnw->lock, flags);
+
+		return 0;
        }
 
        return -1;
@@ -807,42 +829,43 @@ static int flis_get_override(struct gpio_control *control, void *private_data,
 static int flis_set_override(struct gpio_control *control, void *private_data,
                unsigned gpio, unsigned int num)
 {
-       struct intel_mid_gpio *lnw = private_data;
-       u32 offset, value;
-       u32 val_bit, en_bit;
-       unsigned long flags;
+	struct intel_mid_gpio *lnw = private_data;
+	u32 offset, value;
+	u32 val_bit, en_bit;
+	unsigned long flags;
 
-       if (lnw->type == TANGIER_GPIO) {
-               offset = lnw->get_flis_offset(gpio);
-               if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
-                       return -1;
+	if (lnw->type == TANGIER_GPIO) {
+		offset = lnw->get_flis_offset(gpio);
+		if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
+			return -1;
 
-               val_bit = 1 << control->shift;
-               en_bit = 1 << control->rshift;
-
-               spin_lock_irqsave(&lnw->lock, flags);
-               value = get_flis_value(offset);
-               switch (num) {
-               case 0:
-                       value &= ~(en_bit | val_bit);
-                       break;
-               case 1:
+		val_bit = 1 << control->shift;
+		en_bit = 1 << control->rshift;
+		if (!is_merr_i2c_flis(offset))
+			spin_lock_irqsave(&lnw->lock, flags);
+		value = get_flis_value(offset);
+		switch (num) {
+		case 0:
+			value &= ~(en_bit | val_bit);
+			break;
+		case 1:
                        value |= (en_bit | val_bit);
                        break;
-               case 2:
-                       value |= en_bit;
-                       value &= ~val_bit;
-                       break;
-               default:
-                       break;
-               }
-               set_flis_value(value, offset);
-               spin_unlock_irqrestore(&lnw->lock, flags);
+		case 2:
+			value |= en_bit;
+			value &= ~val_bit;
+			break;
+		default:
+			break;
+		}
+		set_flis_value(value, offset);
+		if (!is_merr_i2c_flis(offset))
+			spin_unlock_irqrestore(&lnw->lock, flags);
 
-               return 0;
-       }
+		return 0;
+	}
 
-       return -1;
+	return -1;
 }
 
 #define GPIO_VALUE_CONTROL(xtype, xinfo, xnum) \
