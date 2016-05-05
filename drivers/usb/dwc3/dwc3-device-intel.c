@@ -262,9 +262,9 @@ int dwc3_start_peripheral(struct usb_gadget *g)
 		ret = dwc3_init_for_enumeration(dwc);
 		if (ret)
 			goto err1;
-		dwc3_gadget_run_stop(dwc, 1);
-		if (dwc->hiber_enabled)
-			dwc3_gadget_keep_conn(dwc, 1);
+
+		if (dwc->soft_connected)
+			dwc3_gadget_run_stop(dwc, 1);
 	}
 
 	dwc->pm_state = PM_ACTIVE;

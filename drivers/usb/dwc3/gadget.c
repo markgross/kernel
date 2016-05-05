@@ -1476,7 +1476,7 @@ static int dwc3_gadget_ep_queue(struct usb_ep *ep, struct usb_request *request,
 	/* pad OUT endpoint buffer to MaxPacketSize per databook requirement*/
 	req->short_packet = false;
 	if (!IS_ALIGNED(request->length, ep->desc->wMaxPacketSize)
-		&& !(dep->number & 1) && (dep->number != DWC3_EP_EBC_OUT_NB)) {
+				&& !(dep->number & 1)) {
 		request->length = roundup(request->length,
 					(u32) ep->desc->wMaxPacketSize);
 		/* set flag for bulk-out short request */
@@ -1850,6 +1850,16 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
 	int			ret;
 
 	is_on = !!is_on;
+
+	if (dwc->soft_connected == is_on)
+		return 0;
+
+	dwc->soft_connected = is_on;
+
+	if (dwc->soft_connected == is_on)
+		return 0;
+
+	dwc->soft_connected = is_on;
 
 	spin_lock_irqsave(&dwc->lock, flags);
 	ret = dwc3_gadget_run_stop(dwc, is_on, false);
@@ -3617,8 +3627,8 @@ int dwc3_runtime_suspend(struct device *device)
 
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
-	schedule_delayed_work(&dwc->link_work, msecs_to_jiffies(1000));
-	dev_info(dwc->dev, "suspended\n");
+	__dwc3_vbus_draw(dwc, OTG_DEVICE_SUSPEND);
+	dev_dbg(dwc->dev, "%s(): suspended\n", __func__);
 	dev_vdbg(dwc->dev, "<--- %s()\n", __func__);
 
 	return 0;
