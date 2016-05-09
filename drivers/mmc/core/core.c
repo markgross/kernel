@@ -2648,6 +2648,8 @@ void mmc_start_host(struct mmc_host *host)
 
 	mmc_gpiod_request_cd_irq(host);
 	_mmc_detect_change(host, 0, false);
+	if (host->caps2 & MMC_CAP2_INIT_CARD_SYNC)
+		flush_work(&host->detect.work);
 }
 
 void mmc_stop_host(struct mmc_host *host)
