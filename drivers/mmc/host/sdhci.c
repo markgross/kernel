@@ -1666,12 +1666,30 @@ static void sdhci_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		host->mrq->cmd->error = -ENOMEDIUM;
 		tasklet_schedule(&host->finish_tasklet);
 	} else {
+		if (!(sdhci_readw(host, SDHCI_CLOCK_CONTROL) &
+					SDHCI_CLOCK_CARD_EN)) {
+			/*
+			 * SD bus clock is stopped. no interrupts will be
+			 * generate in this case.
+			 */
+			pr_warn("%s:%s: SD bus clock not enabled\n",
+					__func__, mmc_hostname(mmc));
+			pr_warn("%s:%s: host->pwr 0x%x, host->clock 0x%x\n",
+					__func__, mmc_hostname(mmc),
+					host->pwr, host->clock);
+			sdhci_dumpregs(host);
+			host->mrq->cmd->error = -EIO;
+			tasklet_schedule(&host->finish_tasklet);
+			goto out;
+		}
+
 		if (mrq->sbc && !(host->flags & SDHCI_AUTO_CMD23))
 			sdhci_send_command(host, mrq->sbc);
 		else
 			sdhci_send_command(host, mrq->cmd);
 	}
 
+out:
 	mmiowb();
 	spin_unlock_irqrestore(&host->lock, flags);
 }
@@ -3608,6 +3626,14 @@ EXPORT_SYMBOL_GPL(sdhci_alloc_panic_host);
  *                                                                           *
 \*****************************************************************************/
 
+static void sdhci_set_emmc_state(struct sdhci_host *host, uint32_t state)
+{
+	/* Only if there is dekker mutex available */
+	if (!host->sram_addr)
+		return;
+	writel(state, host->sram_addr + DEKKER_EMMC_STATE);
+}
+
 #ifdef CONFIG_PM
 void sdhci_enable_irq_wakeups(struct sdhci_host *host)
 {
@@ -3669,6 +3695,9 @@ int sdhci_suspend_host(struct sdhci_host *host)
 		enable_irq_wake(host->irq);
 	}
 
+	/* Card succesfully suspended. Tell information to SCU */
+	sdhci_set_emmc_state(host, DEKKER_EMMC_CHIP_SUSPENDED);
+
 	spin_lock_irqsave(&host->lock, flags);
 	host->suspended = true;
 	spin_unlock_irqrestore(&host->lock, flags);
@@ -3720,6 +3749,8 @@ int sdhci_resume_host(struct sdhci_host *host)
 
 	sdhci_enable_card_detection(host);
 
+	/* Card back in active state */
+	sdhci_set_emmc_state(host, DEKKER_EMMC_CHIP_ACTIVE);
 out:
 	sdhci_release_ownership(host->mmc);
 	return ret;
