@@ -33,6 +33,12 @@ struct dwc3;
 #define USB2_I_MAX_OTG          500
 #define USB2_I_UNIT_OTG         100
 
+/* max power consumption of the device from the bus */
+#define USB3_I_MAX_OTG		896
+#define USB3_I_UNIT_OTG		144
+#define USB2_I_MAX_OTG		500
+#define USB2_I_UNIT_OTG		100
+
 /* DEPCFG parameter 1 */
 #define DWC3_DEPCFG_INT_NUM(n)		((n) << 0)
 #define DWC3_DEPCFG_XFER_COMPLETE_EN	(1 << 8)
