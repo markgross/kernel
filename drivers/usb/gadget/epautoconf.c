@@ -19,6 +19,7 @@
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
+#include <asm/intel-mid.h>
 
 /**
  * usb_ep_autoconfig_ss() - choose an endpoint matching the ep
@@ -83,6 +84,19 @@ struct usb_ep *usb_ep_autoconfig_ss(
 
 	/* Second, look at endpoints until an unclaimed one looks usable */
 	list_for_each_entry (ep, &gadget->ep_list, ep_list) {
+
+#ifdef CONFIG_USB_DWC3_GADGET
+		if ((!strcmp("dwc3-gadget", gadget->name)) &&
+			(intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER))
+			/* ep1in, ep8in, ep1out, and ep8out are reserved on
+			 * Merrifield's DWC3 device controller
+			 */
+			if (!strncmp(ep->name, "ep1in", 5) ||
+				!strncmp(ep->name, "ep8in", 5) ||
+				!strncmp(ep->name, "ep1out", 6) ||
+				!strncmp(ep->name, "ep8out", 6))
+			continue;
+#endif
 		if (usb_gadget_ep_match_desc(gadget, ep, desc, ep_comp))
 			goto found_ep;
 	}
