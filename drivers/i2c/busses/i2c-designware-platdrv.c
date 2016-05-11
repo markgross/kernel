@@ -39,12 +39,19 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/acpi.h>
+#include <linux/pci.h>
 #include <linux/platform_data/i2c-designware.h>
+#include <asm/intel-mid.h>
 #include "i2c-designware-core.h"
 
-static u32 i2c_dw_get_clk_rate_khz(struct dw_i2c_dev *dev)
+static int dw_i2c_plat_suspend(struct device *dev)
 {
-	return clk_get_rate(dev->clk)/1000;
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
+
+	dev_dbg(dev, "suspend called\n");
+	return i2c_dw_suspend(i2c, false);
 }
 
 #ifdef CONFIG_ACPI
@@ -90,10 +97,34 @@ static void dw_i2c_acpi_params(struct platform_device *pdev, char method[],
 	kfree(buf.pointer);
 }
 
-static int dw_i2c_acpi_configure(struct platform_device *pdev)
+static void dw_i2c_acpi_unconfigure(struct platform_device *pdev)
 {
-	struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
+        struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
+        const struct acpi_device_id *id;
+
+        id = acpi_match_device(pdev->dev.driver->acpi_match_table, &pdev->dev);
+        if (id && id->driver_data)
+                clk_unregister(dev->clk);
+}
+
+#else
+static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
+{
+	return -ENODEV;
+}
+static inline void dw_i2c_acpi_unconfigure(struct platform_device *pdev) { }
+#endif
+
+static int dw_i2c_plat_runtime_suspend(struct device *dev)
+{
 	const struct acpi_device_id *id;
+
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
+
+	dev_dbg(dev, "runtime suspend called\n");
+	i2c_dw_suspend(i2c, true);
 
 	dev->adapter.nr = -1;
 	dev->tx_fifo_depth = 32;
@@ -114,168 +145,78 @@ static int dw_i2c_acpi_configure(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct acpi_device_id dw_i2c_acpi_match[] = {
-	{ "INT33C2", 0 },
-	{ "INT33C3", 0 },
-	{ "INT3432", 0 },
-	{ "INT3433", 0 },
-	{ "80860F41", 0 },
-	{ "808622C1", 0 },
-	{ "AMD0010", ACCESS_INTR_MASK },
-	{ }
-};
-MODULE_DEVICE_TABLE(acpi, dw_i2c_acpi_match);
-#else
-static inline int dw_i2c_acpi_configure(struct platform_device *pdev)
+static int dw_i2c_plat_runtime_resume(struct device *dev)
 {
-	return -ENODEV;
-}
-#endif
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
 
-static int dw_i2c_plat_probe(struct platform_device *pdev)
-{
-	struct dw_i2c_dev *dev;
-	struct i2c_adapter *adap;
-	struct resource *mem;
-	struct dw_i2c_platform_data *pdata;
-	int irq, r;
-	u32 clk_freq, ht = 0;
-
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
-		return irq;
-
-	dev = devm_kzalloc(&pdev->dev, sizeof(struct dw_i2c_dev), GFP_KERNEL);
-	if (!dev)
-		return -ENOMEM;
-
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	dev->base = devm_ioremap_resource(&pdev->dev, mem);
-	if (IS_ERR(dev->base))
-		return PTR_ERR(dev->base);
-
-	dev->dev = &pdev->dev;
-	dev->irq = irq;
-	platform_set_drvdata(pdev, dev);
-
-	/* fast mode by default because of legacy reasons */
-	clk_freq = 400000;
-
-	if (has_acpi_companion(&pdev->dev)) {
-		dw_i2c_acpi_configure(pdev);
-	} else if (pdev->dev.of_node) {
-		of_property_read_u32(pdev->dev.of_node,
-					"i2c-sda-hold-time-ns", &ht);
-
-		of_property_read_u32(pdev->dev.of_node,
-				     "i2c-sda-falling-time-ns",
-				     &dev->sda_falling_time);
-		of_property_read_u32(pdev->dev.of_node,
-				     "i2c-scl-falling-time-ns",
-				     &dev->scl_falling_time);
-
-		of_property_read_u32(pdev->dev.of_node, "clock-frequency",
-				     &clk_freq);
-
-		/* Only standard mode at 100kHz and fast mode at 400kHz
-		 * are supported.
-		 */
-		if (clk_freq != 100000 && clk_freq != 400000) {
-			dev_err(&pdev->dev, "Only 100kHz and 400kHz supported");
-			return -EINVAL;
-		}
-	} else {
-		pdata = dev_get_platdata(&pdev->dev);
-		if (pdata)
-			clk_freq = pdata->i2c_scl_freq;
-	}
-
-	r = i2c_dw_eval_lock_support(dev);
-	if (r)
-		return r;
-
-	dev->functionality =
-		I2C_FUNC_I2C |
-		I2C_FUNC_10BIT_ADDR |
-		I2C_FUNC_SMBUS_BYTE |
-		I2C_FUNC_SMBUS_BYTE_DATA |
-		I2C_FUNC_SMBUS_WORD_DATA |
-		I2C_FUNC_SMBUS_I2C_BLOCK;
-	if (clk_freq == 100000)
-		dev->master_cfg =  DW_IC_CON_MASTER | DW_IC_CON_SLAVE_DISABLE |
-			DW_IC_CON_RESTART_EN | DW_IC_CON_SPEED_STD;
-	else
-		dev->master_cfg =  DW_IC_CON_MASTER | DW_IC_CON_SLAVE_DISABLE |
-			DW_IC_CON_RESTART_EN | DW_IC_CON_SPEED_FAST;
-
-	dev->clk = devm_clk_get(&pdev->dev, NULL);
-	dev->get_clk_rate_khz = i2c_dw_get_clk_rate_khz;
-	if (IS_ERR(dev->clk))
-		return PTR_ERR(dev->clk);
-	clk_prepare_enable(dev->clk);
-
-	if (!dev->sda_hold_time && ht) {
-		u32 ic_clk = dev->get_clk_rate_khz(dev);
-
-		dev->sda_hold_time = div_u64((u64)ic_clk * ht + 500000,
-					     1000000);
-	}
-
-	if (!dev->tx_fifo_depth) {
-		u32 param1 = i2c_dw_read_comp_param(dev);
-
-		dev->tx_fifo_depth = ((param1 >> 16) & 0xff) + 1;
-		dev->rx_fifo_depth = ((param1 >> 8)  & 0xff) + 1;
-		dev->adapter.nr = pdev->id;
-	}
-
-	adap = &dev->adapter;
-	adap->owner = THIS_MODULE;
-	adap->class = I2C_CLASS_DEPRECATED;
-	ACPI_COMPANION_SET(&adap->dev, ACPI_COMPANION(&pdev->dev));
-	adap->dev.of_node = pdev->dev.of_node;
-
-	if (dev->pm_runtime_disabled) {
-		pm_runtime_forbid(&pdev->dev);
-	} else {
-		pm_runtime_set_autosuspend_delay(&pdev->dev, 1000);
-		pm_runtime_use_autosuspend(&pdev->dev);
-		pm_runtime_set_active(&pdev->dev);
-		pm_runtime_enable(&pdev->dev);
-	}
-
-	r = i2c_dw_probe(dev);
-	if (r && !dev->pm_runtime_disabled)
-		pm_runtime_disable(&pdev->dev);
-
-	return r;
-}
-
-static int dw_i2c_plat_remove(struct platform_device *pdev)
-{
-	struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
-
-	pm_runtime_get_sync(&pdev->dev);
-
-	i2c_del_adapter(&dev->adapter);
-
-	i2c_dw_disable(dev);
-
-	pm_runtime_dont_use_autosuspend(&pdev->dev);
-	pm_runtime_put_sync(&pdev->dev);
-	if (!dev->pm_runtime_disabled)
-		pm_runtime_disable(&pdev->dev);
+	dev_dbg(dev, "runtime resume called\n");
+	i2c_dw_resume(i2c, true);
 
 	return 0;
 }
 
-#ifdef CONFIG_OF
-static const struct of_device_id dw_i2c_of_match[] = {
-	{ .compatible = "snps,designware-i2c", },
-	{},
-};
-MODULE_DEVICE_TABLE(of, dw_i2c_of_match);
+static int dw_i2c_plat_probe(struct platform_device *pdev)
+{
+	struct dw_i2c_dev *dev;
+	struct resource *mem, *ioarea;
+	unsigned long start, len;
+	int bus_idx = 0;
+	int irq;
+
+#ifdef CONFIG_ACPI
+	for (id = dw_i2c_acpi_ids; id->id[0]; id++)
+		if (!strncmp(id->id, dev_name(&pdev->dev), strlen(id->id))) {
+			bus_idx = id->driver_data + bus_num;
+			bus_num++;
+		}
+
+#else
+	bus_idx = pdev->id;
 #endif
+
+	/* NOTE: driver uses the static register mapping */
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!mem) {
+		dev_err(&pdev->dev, "no mem resource?\n");
+		return -EINVAL;
+        }
+        start = mem->start;
+        len = resource_size(mem);
+
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		dev_err(&pdev->dev, "no irq resource?\n");
+		return irq;
+	}
+
+	ioarea = request_mem_region(mem->start, resource_size(mem),
+			pdev->name);
+	if (!ioarea) {
+		dev_err(&pdev->dev, "I2C region already claimed\n");
+		return -EBUSY;
+ 	}
+
+	dev = i2c_dw_setup(&pdev->dev, bus_idx, start, len, irq);
+	if (IS_ERR(dev)) {
+		release_mem_region(mem->start, resource_size(mem));
+		dev_err(&pdev->dev, "failed to setup i2c\n");
+		return -EINVAL;
+ 	}
+
+	platform_set_drvdata(pdev, dev);
+	acpi_i2c_register_devices(&dev->adapter);
+
+ 	pm_runtime_set_active(&pdev->dev);
+ 	pm_runtime_enable(&pdev->dev);
+	pm_runtime_allow(&pdev->dev);
+	pm_runtime_use_autosuspend(&pdev->dev);
+	pm_runtime_set_autosuspend_delay(&pdev->dev, 50);
+ 
+ 	return 0;
+}
+
 
 #ifdef CONFIG_PM_SLEEP
 static int dw_i2c_plat_prepare(struct device *dev)
@@ -293,31 +234,21 @@ static void dw_i2c_plat_complete(struct device *dev)
 #define dw_i2c_plat_complete	NULL
 #endif
 
+static int __exit dw_i2c_remove(struct platform_device *pdev)
+{
+	struct dw_i2c_dev *dev = platform_get_drvdata(pdev);
+	struct resource *mem;
+ 
+	pm_runtime_forbid(&pdev->dev);
+	i2c_dw_free(&pdev->dev, dev);
+	platform_set_drvdata(pdev, NULL);
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (mem)
+		release_mem_region(mem->start, resource_size(mem));
+	return 0;
+}
+
 #ifdef CONFIG_PM
-static int dw_i2c_plat_suspend(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct dw_i2c_dev *i_dev = platform_get_drvdata(pdev);
-
-	i2c_dw_disable(i_dev);
-	clk_disable_unprepare(i_dev->clk);
-
-	return 0;
-}
-
-static int dw_i2c_plat_resume(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct dw_i2c_dev *i_dev = platform_get_drvdata(pdev);
-
-	clk_prepare_enable(i_dev->clk);
-
-	if (!i_dev->pm_runtime_disabled)
-		i2c_dw_init(i_dev);
-
-	return 0;
-}
-
 static const struct dev_pm_ops dw_i2c_dev_pm_ops = {
 	.prepare = dw_i2c_plat_prepare,
 	.complete = dw_i2c_plat_complete,
@@ -338,17 +269,32 @@ static struct platform_driver dw_i2c_driver = {
 	.remove = dw_i2c_plat_remove,
 	.driver		= {
 		.name	= "i2c_designware",
-		.of_match_table = of_match_ptr(dw_i2c_of_match),
-		.acpi_match_table = ACPI_PTR(dw_i2c_acpi_match),
 		.pm	= DW_I2C_DEV_PMOPS,
+#ifdef CONFIG_ACPI
+		.acpi_match_table = ACPI_PTR(dw_i2c_acpi_match),
+#endif
 	},
 };
 
 static int __init dw_i2c_init_driver(void)
 {
+	struct pci_dev *dw_pci;
+
+	/*
+	 * Try to get pci device, if exist, then exit ACPI platform
+	 * register, On BYT FDK, include two enum mode: PCI, ACPI,
+	 * ignore ACPI enum mode.
+	 */
+	dw_pci = pci_get_device(PCI_VENDOR_ID_INTEL, 0x0F41, NULL);
+	if (dw_pci) {
+		pr_info("DW I2C: Find I2C controller in PCI device, "
+			"exit ACPI platform register!\n");
+		return 0;
+	}
+
 	return platform_driver_register(&dw_i2c_driver);
 }
-subsys_initcall(dw_i2c_init_driver);
+module_init(dw_i2c_init_driver);
 
 static void __exit dw_i2c_exit_driver(void)
 {
