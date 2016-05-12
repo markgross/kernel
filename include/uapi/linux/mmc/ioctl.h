@@ -57,6 +57,20 @@ struct mmc_ioc_multi_cmd {
 };
 
 #define MMC_IOC_CMD _IOWR(MMC_BLOCK_MAJOR, 0, struct mmc_ioc_cmd)
+
+struct mmc_ioc_rpmb_req {
+	__u16 type;                     /* RPMB request type */
+	__u16 *result;                  /* response or request result */
+	__u16 blk_cnt;                  /* Number of blocks(half sector 256B) */
+	__u16 addr;                     /* data address */
+	__u32 *wc;                      /* write counter */
+	__u8 *nonce;                    /* Ramdom number */
+	__u8 *data;                     /* Buffer of the user data */
+	__u8 *mac;                      /* Message Authentication Code */
+};
+
+#define MMC_IOC_RPMB_REQ _IOWR(MMC_BLOCK_MAJOR, 1, struct mmc_ioc_rpmb_req)
+
 /*
  * MMC_IOC_MULTI_CMD: Used to send an array of MMC commands described by
  *	the structure mmc_ioc_multi_cmd. The MMC driver will issue all
