@@ -35,6 +35,11 @@
 */
 #define MID_WDT_DEFAULT_TIMEOUT                80
 
+static int disable = 0;
+module_param(disable, int, 0644);
+MODULE_PARM_DESC(disable, "stop WDT at probe time");
+
+
 /* SCU watchdog messages */
 enum {
 	SCU_WATCHDOG_START = 0,
@@ -173,6 +178,9 @@ static int mid_wdt_probe(struct platform_device *pdev)
 	}
 
 	dev_info(&pdev->dev, "Intel MID watchdog device probed\n");
+
+	if (disable)
+		ret = wdt_stop(wdt_dev); /*stop WDT from going off*/
 
 	return 0;
 }
