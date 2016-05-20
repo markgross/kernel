@@ -71,3 +71,12 @@ void __init *spidev_platform_data(void *info)
 
 	return NULL;
 }
+
+static const struct devs_id spidev_dev_id __initconst = {
+	.name = "spidev",
+	.type = SFI_DEV_TYPE_SPI,
+	.delay = 0,
+	.get_platform_data = &spidev_platform_data,
+};
+
+sfi_device(spidev_dev_id);

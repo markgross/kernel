@@ -1083,8 +1083,14 @@ static struct dwc_otg2 *dwc3_otg_alloc(struct device *dev)
 	otg->otg_data = dev->platform_data;
 
 	usb_phy = &otg->usb2_phy;
-       // This is wrong! Non-compatible pointers struct phy is not struct usb_phy
-       // otg->otg.phy = usb_phy;
+
+	/* With changes to struct usb_otg this is wrong;
+	 * Non-compatible pointers struct phy is not struct usb_phy,
+	 * need to use the old usb_phy interface that was renamed
+	otg->otg.phy = usb_phy;
+	 */
+	otg->otg.usb_phy = usb_phy;
+
 	otg->usb2_phy.otg = &otg->otg;
 
 	otg->dev		= dev;
@@ -1098,7 +1104,10 @@ static struct dwc_otg2 *dwc3_otg_alloc(struct device *dev)
 	otg->usb2_phy.set_power	= dwc3_otg_pdata->set_power;
 	otg->usb2_phy.get_chrg_status	= dwc_otg_get_chrg_status;
 	otg->usb2_phy.io_ops = &dwc_otg_io_ops;
+	/* Why are they re-initializing again? This was just done above
+	 * and for no obvious reason done here again.
 	otg->usb2_phy.otg	= &otg->otg;
+	*/
 	otg->otg.set_host	= dwc_otg2_set_host;
 	otg->otg.set_peripheral	= dwc_otg2_set_peripheral;
 	ATOMIC_INIT_NOTIFIER_HEAD(&otg->usb2_phy.notifier);
@@ -1107,10 +1116,6 @@ static struct dwc_otg2 *dwc3_otg_alloc(struct device *dev)
 	otg->state = DWC_STATE_B_IDLE;
 	spin_lock_init(&otg->lock);
 	init_waitqueue_head(&otg->main_wq);
-
-	/* Register otg notifier to monitor ID and VBus change events */
-	otg->nb.notifier_call = dwc_otg_handle_notification;
-	usb_register_notifier(&otg->usb2_phy, &otg->nb);
 
 	otg_dbg(otg, "Version: %s\n", VERSION);
 	retval = usb_add_phy(&otg->usb2_phy, USB_PHY_TYPE_USB2);
@@ -1126,6 +1131,15 @@ static struct dwc_otg2 *dwc3_otg_alloc(struct device *dev)
 			retval);
 		goto err2;
 	}
+
+	/* Register otg notifier to monitor ID and VBus change events;
+	 * NOTE: register calls HAVE to come after adding phy, since 
+	 * newer kernels added a call to ATOMIC_INIT_NOTIFIER_HEAD()
+	 * to clear out the notifier before the add (which would wipeout
+	 * the notifier you register in usb_register_notifier()). 
+	 */
+	otg->nb.notifier_call = dwc_otg_handle_notification;
+	usb_register_notifier(&otg->usb2_phy, &otg->nb);
 
 	return otg;
 

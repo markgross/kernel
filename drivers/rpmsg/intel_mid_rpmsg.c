@@ -146,11 +146,18 @@ int rpmsg_send_command(struct rpmsg_instance *instance, u32 cmd,
 	rpmsg_lock();
 
 	mutex_lock(&instance->instance_lock);
-
+	
+	pr_debug("%s: cmd=0x%x,sub=0x%x,in=0x%x,out=0x%x,inlen=0x%x,outlen=0x%x\n",
+		__func__, cmd, sub, in?*in:0, out?*out:0, inlen, outlen);
 	/* Prepare Tx buffer */
 	instance->tx_msg->cmd = cmd;
 	instance->tx_msg->sub = sub;
+	pr_debug("%s: instance->tx_msg->in=0x%x\n", __func__, instance->tx_msg->in);
+	instance->tx_msg->in = 0;
+	pr_debug("%s: instance->tx_msg->in set to 0; instance->tx_msg->in=0x%x\n",
+		__func__, instance->tx_msg->in);
 	instance->tx_msg->in = (u32 *)in;
+	pr_debug("%s: instance->tx_msg->in=0x%x\n", __func__, instance->tx_msg->in);
 	instance->tx_msg->out = out;
 	instance->tx_msg->inlen = inlen;
 	instance->tx_msg->outlen = outlen;

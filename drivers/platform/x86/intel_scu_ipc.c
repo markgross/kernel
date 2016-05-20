@@ -548,6 +548,8 @@ int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
 	mutex_lock(&ipclock);
 	if (scu->dev == NULL) {
 		mutex_unlock(&ipclock);
+		pr_debug("%s:, ipcdev.pdev == NULL, returning %d\n",
+			__func__, -ENODEV);
 		return -ENODEV;
 	}
 
@@ -808,7 +810,26 @@ static struct pci_driver ipc_driver = {
 	.remove = ipc_remove,
 };
 
-module_pci_driver(ipc_driver);
+//module_pci_driver(ipc_driver);
+static int __init intel_scu_ipc_init(void)
+{
+	int platform;           /* Platform type */
+
+	platform = intel_mid_identify_cpu();
+	if (platform == 0)
+		return -ENODEV;
+
+	register_pm_notifier(&scu_ipc_pm_notifier);
+	return  pci_register_driver(&ipc_driver);
+}
+
+static void __exit intel_scu_ipc_exit(void)
+{
+	pci_unregister_driver(&ipc_driver);
+}
+
+fs_initcall(intel_scu_ipc_init);
+module_exit(intel_scu_ipc_exit);
 
 MODULE_AUTHOR("Sreedhara DS <sreedhara.ds@intel.com>");
 MODULE_DESCRIPTION("Intel SCU IPC driver");

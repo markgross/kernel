@@ -126,23 +126,34 @@ static int dw_i2c_plat_runtime_suspend(struct device *dev)
 	dev_dbg(dev, "runtime suspend called\n");
 	i2c_dw_suspend(i2c, true);
 
-	dev->adapter.nr = -1;
-	dev->tx_fifo_depth = 32;
-	dev->rx_fifo_depth = 32;
+	if (intel_mid_identify_cpu() != INTEL_MID_CPU_CHIP_TANGIER) {
+		dev->adapter.nr = -1;
+		dev->tx_fifo_depth = 32;
+		dev->rx_fifo_depth = 32;
 
-	/*
-	 * Try to get SDA hold time and *CNT values from an ACPI method if
-	 * it exists for both supported speed modes.
-	 */
-	dw_i2c_acpi_params(pdev, "SSCN", &dev->ss_hcnt, &dev->ss_lcnt, NULL);
-	dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
-			   &dev->sda_hold_time);
+		/*
+		 * Try to get SDA hold time and *CNT values from an ACPI method if
+		 * it exists for both supported speed modes.
+		 */
+		dw_i2c_acpi_params(pdev, "SSCN", &dev->ss_hcnt, &dev->ss_lcnt, NULL);
+		dw_i2c_acpi_params(pdev, "FMCN", &dev->fs_hcnt, &dev->fs_lcnt,
+				   &dev->sda_hold_time);
 
-	id = acpi_match_device(pdev->dev.driver->acpi_match_table, &pdev->dev);
-	if (id && id->driver_data)
-		dev->accessor_flags |= (u32)id->driver_data;
-
+		id = acpi_match_device(pdev->dev.driver->acpi_match_table, &pdev->dev);
+		if (id && id->driver_data)
+			dev->accessor_flags |= (u32)id->driver_data;
+	}
 	return 0;
+}
+
+static int dw_i2c_plat_resume(struct device *dev)
+{
+	struct platform_device *pdev =
+		container_of(dev, struct platform_device, dev);
+	struct dw_i2c_dev *i2c = platform_get_drvdata(pdev);
+
+	dev_err(dev, "resume called\n");
+	return i2c_dw_resume(i2c, false);
 }
 
 static int dw_i2c_plat_runtime_resume(struct device *dev)
@@ -269,6 +280,7 @@ static struct platform_driver dw_i2c_driver = {
 	.remove = dw_i2c_plat_remove,
 	.driver		= {
 		.name	= "i2c_designware",
+		.owner	= THIS_MODULE,
 		.pm	= DW_I2C_DEV_PMOPS,
 #ifdef CONFIG_ACPI
 		.acpi_match_table = ACPI_PTR(dw_i2c_acpi_match),
@@ -292,7 +304,7 @@ static int __init dw_i2c_init_driver(void)
 		return 0;
 	}
 
-	return platform_driver_register(&dw_i2c_driver);
+	return platform_driver_probe(&dw_i2c_driver, dw_i2c_probe);
 }
 module_init(dw_i2c_init_driver);
 

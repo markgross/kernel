@@ -6,7 +6,7 @@
  * Copyright (C) 2006 Texas Instruments.
  * Copyright (C) 2007 MontaVista Software Inc.
  * Copyright (C) 2009 Provigent Ltd.
- *
+ o
  * ----------------------------------------------------------------------------
  *
  * This program is free software; you can redistribute it and/or modify
@@ -478,6 +478,7 @@ static struct i2c_algorithm i2c_dw_algo = {
 
 int i2c_dw_suspend(struct dw_i2c_dev *dev, bool runtime)
 {
+	pr_debug("%s: runtime=%d\n",__func__, runtime);
 	if (runtime)
 		i2c_dw_disable(dev);
 	else {
@@ -1037,33 +1038,23 @@ static int i2c_dw_wait_bus_not_busy(struct dw_i2c_dev *dev)
 static void i2c_dw_xfer_init(struct dw_i2c_dev *dev)
 {
 	struct i2c_msg *msgs = dev->msgs;
-	u32 ic_con, ic_tar = 0;
+	u32 ic_con;
 
 	/* Disable the adapter */
 	i2c_dw_disable(dev);
 
+	/* set the slave (target) address */
+	dw_writel(dev, msgs[dev->msg_write_idx].addr, DW_IC_TAR);
+
 	/* if the slave address is ten bit address, enable 10BITADDR */
 	ic_con = dw_readl(dev, DW_IC_CON);
-	if (msgs[dev->msg_write_idx].flags & I2C_M_TEN) {
+	if (msgs[dev->msg_write_idx].flags & I2C_M_TEN)
 		ic_con |= DW_IC_CON_10BITADDR_MASTER;
-		/*
-		 * If I2C_DYNAMIC_TAR_UPDATE is set, the 10-bit addressing
-		 * mode has to be enabled via bit 12 of IC_TAR register.
-		 * We set it always as I2C_DYNAMIC_TAR_UPDATE can't be
-		 * detected from registers.
-		 */
-		ic_tar = DW_IC_TAR_10BITADDR_MASTER;
-	} else {
+	else
 		ic_con &= ~DW_IC_CON_10BITADDR_MASTER;
-	}
+
 
 	dw_writel(dev, ic_con, DW_IC_CON);
-
-	/*
-	 * Set the slave (target) address and enable 10-bit addressing mode
-	 * if applicable.
-	 */
-	dw_writel(dev, msgs[dev->msg_write_idx].addr | ic_tar, DW_IC_TAR);
 
 	/* enforce disabled interrupts (due to HW issues) */
 	i2c_dw_disable_int(dev);
@@ -1092,7 +1083,6 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 	u32 addr = msgs[dev->msg_write_idx].addr;
 	u32 buf_len = dev->tx_buf_len;
 	u8 *buf = dev->tx_buf;
-	bool need_restart = false;
 	unsigned long flags;
 
 	intr_mask = DW_IC_INTR_DEFAULT_MASK;
@@ -1132,14 +1122,6 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 			/* new i2c_msg */
 			buf = msgs[dev->msg_write_idx].buf;
 			buf_len = msgs[dev->msg_write_idx].len;
-
-			/* If both IC_EMPTYFIFO_HOLD_MASTER_EN and
-			 * IC_RESTART_EN are set, we must manually
-			 * set restart bit between messages.
-			 */
-			if ((dev->master_cfg & DW_IC_CON_RESTART_EN) &&
-					(dev->msg_write_idx > 0))
-				need_restart = true;
 		}
 
 		tx_limit = dev->tx_fifo_depth - dw_readl(dev, DW_IC_TXFLR);
@@ -1150,13 +1132,7 @@ i2c_dw_xfer_msg(struct dw_i2c_dev *dev)
 				&& dev->msg_write_idx == dev->msgs_num - 1) ?
 				DW_IC_CMD_STOP : 0;
 
-			if (need_restart) {
-				cmd |= BIT(10);
-				need_restart = false;
-			}
-
 			if (msgs[dev->msg_write_idx].flags & I2C_M_RD) {
-
 				dw_writel(dev, cmd | 0x100, DW_IC_DATA_CMD);
 				rx_limit--;
 			} else
@@ -1256,6 +1232,7 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
 	struct dw_i2c_dev *dev = i2c_get_adapdata(adap);
 	int ret;
+	unsigned long timeout;
 
 	dev_dbg(dev->dev, "%s: msgs: %d\n", __func__, num);
 
@@ -1288,7 +1265,8 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	i2c_dw_xfer_init(dev);
 
 	/* wait for tx to complete */
-	if (!wait_for_completion_timeout(&dev->cmd_complete, 3*HZ)) {
+	timeout = wait_for_completion_timeout(&dev->cmd_complete, 3*HZ);
+	if (timeout == 0) {
 		dev_err(dev->dev, "controller timed out\n");
 		i2c_dw_dump(dev);
 		trigger_all_cpu_backtrace();
@@ -1300,15 +1278,6 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		goto done;
 	}
 
-	/*
-	 * We must disable the adapter before unlocking the &dev->lock mutex
-	 * below. Otherwise the hardware might continue generating interrupts
-	 * which in turn causes a race condition with the following transfer.
-	 * Needs some more investigation if the additional interrupts are
-	 * a hardware bug or this driver doesn't handle them correctly yet.
-	 */
-	i2c_dw_disable(dev);
-
 	if (dev->msg_err) {
 		ret = dev->msg_err;
 		goto done;
@@ -1316,6 +1285,8 @@ i2c_dw_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	/* no error */
 	if (likely(!dev->cmd_err)) {
+		/* Disable the adapter */
+		i2c_dw_disable(dev);
 		ret = num;
 		goto done;
 	}
@@ -1362,7 +1333,7 @@ static u32 i2c_dw_read_clear_intrbits(struct dw_i2c_dev *dev)
 	 * The raw version might be useful for debugging purposes.
 	 */
 	stat = dw_readl(dev, DW_IC_INTR_STAT);
-
+	pr_debug("%s: stat=0x%x", __func__, stat);
 	/*
 	 * Do not use the IC_CLR_INTR register to clear interrupts, or
 	 * you'll miss some interrupts, triggered during the period from
@@ -1410,7 +1381,7 @@ irqreturn_t i2c_dw_isr(int this_irq, void *dev_id)
 	u32 stat, enabled;
 
 	pm_runtime_get(dev->dev);
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 	if (!pm_runtime_active(dev->dev)) {
 		pm_runtime_put_autosuspend(dev->dev);
 		if (dev->share_irq)
@@ -1541,7 +1512,15 @@ int i2c_dw_probe(struct dw_i2c_dev *dev)
 	int r;
 
 	init_completion(&dev->cmd_complete);
-	mutex_init(&dev->lock);
+	/* This is a new probe call to 4.4+, but in the
+	 * forked i2c driver it's using semaphore locks with
+	 * the same name, we'll have to convert these over as
+	 * part of the driver rewrite for adding in our specific
+	 * changes; for now we'll just comment it out here since
+	 * the current semaphore lock is enabled in i2c_dw_setup()
+	 * with the call "sema_init(&dev->lock, 1)"
+	 */
+	//mutex_init(&dev->lock);
 
 	r = i2c_dw_init(dev);
 	if (r)

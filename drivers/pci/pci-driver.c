@@ -305,11 +305,14 @@ static long local_pci_probe(void *_ddi)
 	pm_runtime_get_sync(dev);
 	pci_dev->driver = pci_drv;
 	rc = pci_drv->probe(pci_dev, ddi->id);
-	if (!rc)
+	if (!rc) {
+		pr_debug("%s: return rc=%d\n", __func__, rc);
 		return rc;
+	}
 	if (rc < 0) {
 		pci_dev->driver = NULL;
 		pm_runtime_put_sync(dev);
+		pr_debug("%s: return rc=%d\n", __func__, rc);
 		return rc;
 	}
 	/*
@@ -359,6 +362,7 @@ static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 	} else
 		error = local_pci_probe(&ddi);
 
+	pr_debug("%s: returning error=%d\n", __func__, error);
 	return error;
 }
 
@@ -377,13 +381,18 @@ static int __pci_device_probe(struct pci_driver *drv, struct pci_dev *pci_dev)
 
 	if (!pci_dev->driver && drv->probe) {
 		error = -ENODEV;
-
 		id = pci_match_device(drv, pci_dev);
-		if (id)
+		if (id) {
 			error = pci_call_probe(drv, pci_dev, id);
-		if (error >= 0)
+			pr_debug("%s: error=%d\n", __func__, error);
+		}
+		if (error >= 0) {
 			error = 0;
+			pr_debug("%s: error=%d: error is >= 0, setting error == 0\n",
+				__func__, error);
+		}
 	}
+	pr_debug("%s: return error=%d\n", __func__, error);
 	return error;
 }
 
@@ -402,6 +411,11 @@ static int pci_device_probe(struct device *dev)
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	struct pci_driver *drv = to_pci_driver(dev->driver);
 
+	pr_debug("%s: dev->init_name=\"%s\", "
+		"dev->driver->name=\"%s\", dev->driver->bus->name=\"%s\", "
+		"dev->driver->bus->dev_name=\"%s\"\n", __func__, dev->init_name,
+		dev->driver->name, dev->driver->bus->name, dev->driver->bus->dev_name);
+
 	error = pcibios_alloc_irq(pci_dev);
 	if (error < 0)
 		return error;
@@ -409,10 +423,12 @@ static int pci_device_probe(struct device *dev)
 	pci_dev_get(pci_dev);
 	error = __pci_device_probe(drv, pci_dev);
 	if (error) {
+		pr_debug("%s: pci probe failed, error=%d\n", __func__, error);
 		pcibios_free_irq(pci_dev);
 		pci_dev_put(pci_dev);
 	}
 
+	pr_debug("%s: return error=%d\n", __func__, error);
 	return error;
 }
 
@@ -1215,7 +1231,7 @@ static int pci_pm_runtime_idle(struct device *dev)
 	struct pci_dev *pci_dev = to_pci_dev(dev);
 	const struct dev_pm_ops *pm = dev->driver ? dev->driver->pm : NULL;
 	int ret = 0;
-
+	
 	/*
 	 * If pci_dev->driver is not set (unbound), the device should
 	 * always remain in D0 regardless of the runtime PM status

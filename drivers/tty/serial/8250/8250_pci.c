@@ -3879,8 +3879,13 @@ serial_pci_guess_board(struct pci_dev *dev, struct pciserial_board *board)
 	     bldev < blacklist + ARRAY_SIZE(blacklist);
 	     bldev++) {
 		if (dev->vendor == bldev->vendor &&
-		    dev->device == bldev->device)
+		    dev->device == bldev->device) {
+			pr_info("%s: Blacklist serial device: dev->vendor=0x%x, "
+				"dev->device=0x%x. This will be handled by other kernel "
+				"module or ignored due to hardware limitations.\n",
+				__func__, dev->vendor, dev->device);
 			return -ENODEV;
+		}
 	}
 
 	num_iomem = num_port = 0;

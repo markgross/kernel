@@ -35,3 +35,12 @@ void __init *ads7955_platform_data(void *info)
 
 	return NULL;
 }
+
+static const struct devs_id ads7955_dev_id __initconst = {
+	.name = "ads7955",
+	.type = SFI_DEV_TYPE_SPI,
+	.delay = 0,
+	.get_platform_data = &ads7955_platform_data,
+};
+
+sfi_device(ads7955_dev_id);

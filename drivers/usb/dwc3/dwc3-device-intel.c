@@ -31,9 +31,17 @@
 
 #include "debug.h"
 
+/* Yuck...WTH is with this including c files? We need to move calls used 
+ * either into their parent header files or copy the logic used here 
+ * since we now are using DWC3 core, gadget, ep0, debug, etc... 
+ * for configfs driver in 4.x kernels to have Android ADB access. We also
+ * need to get rid of the hatchet job done to this directories makefile 
+ * (partly mine to workaround the mentioned issues in this comment)
+ */
 #include "core.c"
 #include "ep0.c"
 #include "gadget.c"
+
 
 /* FLIS register */
 #define APBFC_EXIOTG3_MISC0_REG		0xF90FF85C
@@ -160,7 +168,6 @@ static irqreturn_t dwc3_quirks_process_event_buf(struct dwc3 *dwc, u32 buf)
 {
 	struct dwc3_event_buffer *evt;
 	u32 count;
-	u32 reg;
 	int left;
 
 	evt = dwc->ev_buffs[buf];
@@ -264,7 +271,7 @@ int dwc3_start_peripheral(struct usb_gadget *g)
 			goto err1;
 
 		if (dwc->soft_connected)
-			dwc3_gadget_run_stop(dwc, 1);
+			dwc3_gadget_run_stop(dwc, 1, false);
 	}
 
 	dwc->pm_state = PM_ACTIVE;
@@ -315,7 +322,7 @@ int dwc3_stop_peripheral(struct usb_gadget *g)
 	}
 
 	/* Clear Run/Stop bit */
-	dwc3_gadget_run_stop(dwc, 0);
+	dwc3_gadget_run_stop(dwc, 0, true);
 
 	dwc3_gadget_keep_conn(dwc, 0);
 
@@ -406,7 +413,7 @@ static int dwc3_device_gadget_pullup(struct usb_gadget *g, int is_on)
 		dwc3_do_extra_change(dwc);
 		dwc3_event_buffers_setup(dwc);
 		dwc3_init_for_enumeration(dwc);
-		ret = dwc3_gadget_run_stop(dwc, 1);
+		ret = dwc3_gadget_run_stop(dwc, 1, false);
 		if (dwc->hiber_enabled)
 			dwc3_gadget_keep_conn(dwc, 1);
 	} else {
@@ -423,7 +430,7 @@ static int dwc3_device_gadget_pullup(struct usb_gadget *g, int is_on)
 
 		dwc3_stop_active_transfers(dwc);
 		dwc3_gadget_keep_conn(dwc, 0);
-		ret = dwc3_gadget_run_stop(dwc, 0);
+		ret = dwc3_gadget_run_stop(dwc, 0, true);
 		dwc3_gadget_disable_irq(dwc);
 	}
 
@@ -624,7 +631,7 @@ static int dwc3_device_intel_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static const struct dev_pm_ops dwc3_device_pm_ops = {
 	.runtime_suspend	= dwc3_runtime_suspend,
 	.runtime_resume		= dwc3_runtime_resume,
@@ -639,14 +646,13 @@ static struct platform_driver dwc3_device_intel_driver = {
 	.remove		= dwc3_device_intel_remove,
 	.driver		= {
 		.name	= "dwc3-device",
-		.of_match_table	= of_match_ptr(of_dwc3_match),
 		.pm	= DWC3_DEVICE_PM_OPS,
 	},
 };
 
 module_platform_driver(dwc3_device_intel_driver);
 
-MODULE_ALIAS("platform:dwc3");
+MODULE_ALIAS("platform:dwc3-device");
 MODULE_AUTHOR("Felipe Balbi <balbi@ti.com>");
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("DesignWare USB3 DRD Controller Driver");

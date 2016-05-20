@@ -1287,9 +1287,6 @@ static int intel_gpio_probe(struct pci_dev *pdev,
 	priv->pdev = pdev;
 
 	spin_lock_init(&priv->lock);
-	priv->domain = irq_domain_add_simple(pdev->dev.of_node,
-					    priv->chip.ngpio, irq_base,
-					    &intel_gpio_irq_ops, priv);
 
 	pci_set_drvdata(pdev, priv);
 	retval = gpiochip_add(&priv->chip);
@@ -1364,4 +1361,4 @@ static int __init intel_gpio_init(void)
 	return pci_register_driver(&intel_gpio_driver);
 }
 
-device_initcall(intel_gpio_init);
+fs_initcall(intel_gpio_init);

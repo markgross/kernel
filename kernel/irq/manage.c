@@ -1620,20 +1620,28 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	 */
 	if (((irqflags & IRQF_SHARED) && !dev_id) ||
 	    (!(irqflags & IRQF_SHARED) && (irqflags & IRQF_COND_SUSPEND)) ||
-	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND)))
+	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND))) {
+		pr_debug("%s: return %d", __func__, -EINVAL);
 		return -EINVAL;
+	}
 
 	desc = irq_to_desc(irq);
-	if (!desc)
+	if (!desc) {
+		pr_debug("%s: return %d", __func__, -EINVAL);
 		return -EINVAL;
+	}
 
 	if (!irq_settings_can_request(desc) ||
-	    WARN_ON(irq_settings_is_per_cpu_devid(desc)))
+	    WARN_ON(irq_settings_is_per_cpu_devid(desc))) {
+		pr_debug("%s: return %d", __func__, -EINVAL);
 		return -EINVAL;
+	}
 
 	if (!handler) {
-		if (!thread_fn)
+		if (!thread_fn) {
+			pr_debug("%s: return %d", __func__, -EINVAL);
 			return -EINVAL;
+		}
 		handler = irq_default_primary_handler;
 	}
 
@@ -1675,6 +1683,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 		enable_irq(irq);
 	}
 #endif
+	pr_debug("%s: return retval=%d", __func__, retval);
 	return retval;
 }
 EXPORT_SYMBOL(request_threaded_irq);

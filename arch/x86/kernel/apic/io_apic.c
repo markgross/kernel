@@ -64,6 +64,8 @@
 
 #include <asm/apic.h>
 
+#include <asm/intel-mid.h>
+
 #define	for_each_ioapic(idx)		\
 	for ((idx) = 0; (idx) < nr_ioapics; (idx)++)
 #define	for_each_ioapic_reverse(idx)	\
@@ -1124,6 +1126,7 @@ int mp_map_gsi_to_irq(u32 gsi, unsigned int flags, struct irq_alloc_info *info)
 	int ioapic, pin, idx;
 
 	ioapic = mp_find_ioapic(gsi);
+	pr_debug("%s: gsi=%u, ioapic=%d\n", __func__, gsi, ioapic);
 	if (ioapic < 0)
 		return -1;
 

@@ -569,6 +569,7 @@ static irqreturn_t pca953x_irq_handler(int irq, void *devid)
 		pendings = pca953x_irq_pending(chip, pending);
 
 	if (!pendings)
+		return IRQ_HANDLED;
 
 	for (i = 0; i < NBANK(chip); i++) {
 		while (pending[i]) {

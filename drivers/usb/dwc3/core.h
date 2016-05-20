@@ -622,6 +622,11 @@ struct dwc3_hwparams {
 /* HWPARAMS0 */
 #define DWC3_MODE(n)		((n) & 0x7)
 
+#define DWC3_MODE_DEVICE        0
+#define DWC3_MODE_HOST          1
+#define DWC3_MODE_DRD           2
+#define DWC3_MODE_HUB           3
+
 #define DWC3_MDWIDTH(n)		(((n) & 0xff00) >> 8)
 
 /* HWPARAMS1 */
@@ -821,6 +826,7 @@ struct dwc3 {
 	 * that are not in the 3.1 IP.
 	 */
 	u32			revision;
+	u32                     mode;
 
 #define DWC3_REVISION_173A	0x5533173a
 #define DWC3_REVISION_175A	0x5533175a
@@ -1153,5 +1159,7 @@ static inline int dwc3_ulpi_init(struct dwc3 *dwc)
 static inline void dwc3_ulpi_exit(struct dwc3 *dwc)
 { }
 #endif
+
+void dwc3_event_buffers_cleanup(struct dwc3 *dwc);
 
 #endif /* __DRIVERS_USB_DWC3_CORE_H */

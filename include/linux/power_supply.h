@@ -299,6 +299,11 @@ struct power_supply_desc {
 };
 
 struct power_supply {
+	const char *name;
+	enum power_supply_type type;
+	enum power_supply_property *properties;
+	size_t num_properties;
+
 	const struct power_supply_desc *desc;
 
 	char **supplied_to;
@@ -307,6 +312,8 @@ struct power_supply {
 	char **supplied_from;
 	size_t num_supplies;
 	struct device_node *of_node;
+
+	void (*external_power_changed)(struct power_supply *psy);
 
 	/* Driver private data */
 	void *drv_data;
