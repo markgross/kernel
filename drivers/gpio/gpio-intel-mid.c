@@ -202,112 +202,6 @@ static void __iomem *gpio_reg(struct gpio_chip *chip, unsigned offset,
 	return priv->reg_base + reg_type * nreg * 4 + reg * 4;
 }
 
-void lnw_gpio_set_alt(int gpio, int alt)
-{
-       struct intel_mid_gpio *lnw;
-       u32 __iomem *mem;
-       int reg;
-       int bit;
-       u32 offset;
-       u32 value;
-       unsigned long flags;
-
-       /* use this trick to get memio */
-       lnw = irq_get_chip_data(gpio_to_irq(gpio));
-       if (!lnw) {
-               pr_err("langwell_gpio: can not find pin %d\n", gpio);
-               return;
-       }
-       if (gpio < lnw->chip.base || gpio >= lnw->chip.base + lnw->chip.ngpio) {
-               dev_err(lnw->chip.dev, "langwell_gpio: wrong pin %d to config alt\n", gpio);
-               return;
-       }
-#if 0
-       if (lnw->irq_base + gpio - lnw->chip.base != gpio_to_irq(gpio)) {
-               dev_err(lnw->chip.dev, "langwell_gpio: wrong chip data for pin %d\n", gpio);
-               return;
-       }
-#endif
-	gpio -= lnw->chip.base;
-
-	if (lnw->type != TANGIER_GPIO) {
-		reg = gpio / 16;
-		bit = gpio % 16;
-
-		mem = gpio_reg(&lnw->chip, 0, GAFR);
-		spin_lock_irqsave(&lnw->lock, flags);
-		value = readl(mem + reg);
-		value &= ~(3 << (bit * 2));
-		value |= (alt & 3) << (bit * 2);
-		writel(value, mem + reg);
-		spin_unlock_irqrestore(&lnw->lock, flags);
-		dev_dbg(lnw->chip.dev, "ALT: writing 0x%x to %p\n",
-			value, mem + reg);
-	} else {
-		offset = lnw->get_flis_offset(gpio);
-		if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
-                       return;
-		if (!is_merr_i2c_flis(offset))
-			spin_lock_irqsave(&lnw->lock, flags);
-		value = get_flis_value(offset);
-		value &= ~7;
-		value |= (alt & 7);
-		set_flis_value(value, offset);
-		if (!is_merr_i2c_flis(offset))
-			spin_unlock_irqrestore(&lnw->lock, flags);
-	}
-}
-EXPORT_SYMBOL_GPL(lnw_gpio_set_alt);
-
-int gpio_get_alt(int gpio)
-{
-       struct intel_mid_gpio *lnw;
-       u32 __iomem *mem;
-       int reg;
-       int bit;
-       u32 value;
-       u32 offset;
-
-        /* use this trick to get memio */
-       lnw = irq_get_chip_data(gpio_to_irq(gpio));
-       if (!lnw) {
-               pr_err("langwell_gpio: can not find pin %d\n", gpio);
-               return -1;
-       }
-       if (gpio < lnw->chip.base || gpio >= lnw->chip.base + lnw->chip.ngpio) {
-               dev_err(lnw->chip.dev,
-                       "langwell_gpio: wrong pin %d to config alt\n", gpio);
-               return -1;
-       }
-#if 0
-       if (lnw->irq_base + gpio - lnw->chip.base != gpio_to_irq(gpio)) {
-               dev_err(lnw->chip.dev,
-                       "langwell_gpio: wrong chip data for pin %d\n", gpio);
-               return -1;
-       }
-#endif
-       gpio -= lnw->chip.base;
-
-       if (lnw->type != TANGIER_GPIO) {
-               reg = gpio / 16;
-               bit = gpio % 16;
-
-               mem = gpio_reg(&lnw->chip, 0, GAFR);
-               value = readl(mem + reg);
-               value &= (3 << (bit * 2));
-               value >>= (bit * 2);
-       } else {
-               offset = lnw->get_flis_offset(gpio);
-               if (WARN(offset == -EINVAL, "invalid pin %d\n", gpio))
-                       return -EINVAL;
-
-               value = get_flis_value(offset) & 7;
-       }
-
-       return value;
-}
-EXPORT_SYMBOL_GPL(gpio_get_alt);
-
 static int lnw_gpio_set_debounce(struct gpio_chip *chip, unsigned offset,
                                 unsigned debounce)
 {
@@ -1361,4 +1255,4 @@ static int __init intel_gpio_init(void)
 	return pci_register_driver(&intel_gpio_driver);
 }
 
-fs_initcall(intel_gpio_init);
+device_initcall(intel_gpio_init);

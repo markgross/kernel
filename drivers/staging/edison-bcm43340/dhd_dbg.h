@@ -29,6 +29,8 @@
 
 #define USE_NET_RATELIMIT		1
 
+#define DHD_DEBUG 1
+
 #if defined(DHD_DEBUG)
 
 #define DHD_ERROR(args)		do {if ((dhd_msg_level & DHD_ERROR_VAL) && USE_NET_RATELIMIT) \
