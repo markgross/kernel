@@ -35,6 +35,11 @@
 */
 #define MID_WDT_DEFAULT_TIMEOUT                80
 
+static int enabled = 1;
+
+module_param(enabled, int, 0644);
+MODULE_PARM_DESC(answer, "Enable/Disable Intel SCU Watchdog");
+
 /* SCU watchdog messages */
 enum {
 	SCU_WATCHDOG_START = 0,
@@ -171,6 +176,12 @@ static int mid_wdt_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "error registering watchdog device\n");
 		return ret;
+	}
+
+	/* Check if Intel SCU Watchdog should be stopped at boot */
+	if (!enabled) {
+		dev_info(&pdev->dev, "Kernel command-line is disabling Intel MID SCU watchdog\n");
+		wdt_stop(wdt_dev);
 	}
 
 	dev_info(&pdev->dev, "Intel MID watchdog device probed\n");
