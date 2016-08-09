@@ -7326,13 +7326,23 @@ static s32 wl_setup_wiphy(struct wireless_dev *wdev, struct device *sdiofunc_dev
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0))
 	wdev->wiphy->wowlan = &brcm_wowlan_support;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
+	/* Set wowlan_config to NULL as setting this using the brcm struct
+	 * confuses kfree in call to cfg80211_rdev_free_wowlan from significant
+	 * rewrite to nl80211* from 3.10 -> 4.1+. nl80211_set_wowlan() now
+	 * removes any previous settings to wowlan_config and uses those
+	 * detected as acceptable network triggers.
+	 */
+	wdev->wiphy->wowlan_config = NULL;
+#else
 	/* If this is not provided cfg stack will get disconnect
-	* during suspend.
-	*/
-	wdev->wiphy->wowlan_config = &brcm_wowlan_config;
+        * during suspend.
+        */
+        wdev->wiphy->wowlan_config = &brcm_wowlan_config;
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0) */
 #else
 	wdev->wiphy->wowlan.flags = WIPHY_WOWLAN_ANY;
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) */
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) */ 
 #endif /* CONFIG_PM && WL_CFG80211_P2P_DEV_IF */
 
 	WL_DBG(("Registering custom regulatory)\n"));
