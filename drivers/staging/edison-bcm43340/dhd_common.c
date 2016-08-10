@@ -68,15 +68,15 @@
 #ifdef WLMEDIA_HTSF
 extern void htsf_update(struct dhd_info *dhd, void *data);
 #endif
-/* Original Logging msg level
- * int dhd_msg_level = DHD_ERROR_VAL;
- */
+/* Original Logging msg level */
+int dhd_msg_level = DHD_ERROR_VAL;
+
 /* Intense Logging msg level for serious debugging output
  * int dhd_msg_level = DHD_ERROR_VAL | DHD_TRACE_VAL | DHD_INFO_VAL | DHD_INTR_VAL | DHD_LOG_VAL;
  */
-/* Useful debugging msg level */
-int dhd_msg_level = DHD_ERROR_VAL | DHD_INFO_VAL | DHD_LOG_VAL;
-
+/* Useful debugging msg level
+ * int dhd_msg_level = DHD_ERROR_VAL | DHD_INFO_VAL | DHD_LOG_VAL;
+ */
 
 #include <wl_iw.h>
 
