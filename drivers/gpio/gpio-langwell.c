@@ -32,6 +32,7 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/gpio.h>
+#include <linux/gpio/driver.h>
 #include <linux/slab.h>
 #include <linux/lnw_gpio.h>
 #include <linux/pm_runtime.h>
@@ -1321,9 +1322,11 @@ static int lnw_gpio_probe(struct pci_dev *pdev,
 	lnw->chip.request = lnw_gpio_request;
 	lnw->chip.direction_input = lnw_gpio_direction_input;
 	lnw->chip.direction_output = lnw_gpio_direction_output;
-	/* Not available in 4.x kernels */
-	/* lnw->chip.set_pinmux = lnw_gpio_set_alt; */
-	/* lnw->chip.get_pinmux = gpio_get_alt; */
+	/* set/get pinmux capability ported from 3.10 -> 4.x kernels
+	 * to support Intel SFI based platforms 
+	 */
+	lnw->chip.set_pinmux = lnw_gpio_set_alt;
+	lnw->chip.get_pinmux = gpio_get_alt;
 	lnw->chip.get = lnw_gpio_get;
 	lnw->chip.set = lnw_gpio_set;
 	lnw->chip.to_irq = lnw_gpio_to_irq;

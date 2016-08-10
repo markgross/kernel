@@ -415,7 +415,7 @@ static long i2cdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct i2c_client *client = file->private_data;
 	unsigned long funcs;
 
-	dev_err(&client->adapter->dev, "ioctl, cmd=0x%02x, arg=0x%02lx\n",
+	dev_dbg(&client->adapter->dev, "ioctl, cmd=0x%02x, arg=0x%02lx\n",
 		cmd, arg);
 
 	switch (cmd) {

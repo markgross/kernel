@@ -34,6 +34,9 @@ static DEFINE_MUTEX(sysfs_lock);
 
 /*
  * /sys/class/gpio/gpioN... only for GPIOs that are exported
+ *   /pinmux
+ *      * configures GPIO or alternate function
+ *      * r/w as zero (normal GPIO) or alternate function number
  *   /direction
  *      * MAY BE OMITTED if kernel won't allow direction changes
  *      * is read/write as "in" or "out"
@@ -52,6 +55,56 @@ static DEFINE_MUTEX(sysfs_lock);
  *      * also affects existing and subsequent "falling" and "rising"
  *        /edge configuration
  */
+
+static ssize_t pinmux_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct gpiod_data *data = dev_get_drvdata(dev);
+	struct gpio_desc *desc = data->desc;
+	unsigned int		gpio = desc_to_gpio(desc);
+	struct gpio_chip	*chip;
+	ssize_t			status = -EINVAL;
+
+	mutex_lock(&sysfs_lock);
+
+	chip = desc->chip;
+
+	if (!test_bit(FLAG_EXPORT, &desc->flags))
+		status = -EIO;
+	else if (chip->get_pinmux != NULL)
+		status = sprintf(buf, "%d\n", chip->get_pinmux(gpio));
+
+	mutex_unlock(&sysfs_lock);
+	return status;
+}
+
+static ssize_t pinmux_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct gpiod_data *data = dev_get_drvdata(dev);
+	struct gpio_desc *desc = data->desc;
+	unsigned int		gpio = desc_to_gpio(desc);
+	ssize_t			status = -EINVAL;
+	struct gpio_chip	*chip;
+	long	mux;
+
+	mutex_lock(&sysfs_lock);
+
+	chip = desc->chip;
+
+	if (!test_bit(FLAG_EXPORT, &desc->flags))
+		status = -EIO;
+	else if (chip->set_pinmux != NULL) {
+		status = kstrtol(buf, 0, &mux);
+		if (status == 0)
+			chip->set_pinmux(gpio, mux);
+	}
+
+	mutex_unlock(&sysfs_lock);
+	return status ? : size;
+}
+
+static DEVICE_ATTR_RW(pinmux);
 
 static ssize_t direction_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -377,6 +430,7 @@ static struct attribute *gpio_attrs[] = {
 	&dev_attr_edge.attr,
 	&dev_attr_value.attr,
 	&dev_attr_active_low.attr,
+	&dev_attr_pinmux.attr,
 	NULL,
 };
 
