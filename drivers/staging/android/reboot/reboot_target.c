@@ -57,9 +57,10 @@ static int reboot_target_name2id(const char *name)
 		return NAME2ID[DEFAULT_TARGET_INDEX].id;
 
 	for (i = 0; i < ARRAY_SIZE(NAME2ID); i++)
-		if (!strcmp(NAME2ID[i].name, name))
+		if (!strcmp(NAME2ID[i].name, name)) {
+			pr_debug("%s: name=%s, id=0x%x\n", __func__, name, NAME2ID[i].id);
 			return NAME2ID[i].id;
-
+		}
 	return -EINVAL;
 }
 
@@ -68,9 +69,11 @@ const char *reboot_target_id2name(int id)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(NAME2ID); i++)
-		if (NAME2ID[i].id == id)
+		if (NAME2ID[i].id == id) {
+			pr_debug("%s: name=%s, id=0x%x\n",
+				__func__, NAME2ID[i].name, NAME2ID[i].id);
 			return NAME2ID[i].name;
-
+		}
 	return "";
 }
 
@@ -84,6 +87,8 @@ static int set_reboot_target(const char *name)
 	}
 
 	id  = reboot_target_name2id(name);
+	pr_debug("%s: name=%s, id=0x%x\n",
+                __func__, name, id);
 	if (id < 0) {
 		pr_err("Error in %s: '%s' is not a valid target\n",
 		       __func__, name );
@@ -105,6 +110,7 @@ static int reboot_target_notify(struct notifier_block *notifier,
 	if (!target || target[0] == '\0')
 		target = NAME2ID[DEFAULT_TARGET_INDEX].name;
 
+	pr_debug("%s: target=%s\n", __func__, target);
 	ret = set_reboot_target(target);
 	if (ret)
 		pr_err("%s: Failed to set the reboot target, return=%d\n",

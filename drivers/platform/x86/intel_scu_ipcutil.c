@@ -689,6 +689,7 @@ static long scu_ipc_ioctl(struct file *fp, unsigned int cmd,
 	{
 		u8 reboot_reason;
 		ret = intel_scu_ipc_read_osnib_rr(&reboot_reason);
+		pr_debug("%s: reboot_reason=0x%x\n", __func__, reboot_reason);
 		if (ret < 0)
 			return ret;
 		ret = copy_to_user(argp, &reboot_reason, 1);
@@ -1186,16 +1187,47 @@ exit:
  */
 int intel_scu_ipc_write_osnib_rr(u8 rr)
 {
-	int i;
+	int i, ret, rr_check;
 
+	pr_debug("%s: write reboot reason, rr=0x%x\n", __func__, rr);
 	for (i = 0; i < ARRAY_SIZE(osnib_target_oses); i++) {
+		pr_debug("%s: osnib_target_oses[%d].id=0x%x "
+			"osnib_target_oses[%d].target_os_name=%s\n", __func__,
+			i, osnib_target_oses[i].id, i, osnib_target_oses[i].target_os_name);
 		if (osnib_target_oses[i].id == rr) {
-			pr_info("intel_scu_ipc_write_osnib_rr: reboot reason: %s\n",
-				osnib_target_oses[i].target_os_name);
-			return oshob_info->scu_ipc_write_osnib(
+			pr_debug("%s: reboot reason target: %s\n",
+				__func__, osnib_target_oses[i].target_os_name);
+			/* FIXME: To be proper, intel_scu_ipc_write_osnib_rr() and
+			 * intel_scu_ipc_read_osnib_rr() should possibly be rewritten to
+			 * allow for determining whether or not we should be reading/writing
+			 * to a particular register offset like intel_reserved, oem_reserved,
+			 * or target_mode based on the needs from the SCU for the calling driver.
+			 */
+			/* General OSNIB storage for reboot reason used for OSes like Android */
+			ret = oshob_info->scu_ipc_write_osnib(
 				&rr,
 				1,
 				offsetof(struct scu_ipc_osnib, target_mode));
+			/* Add call to set reboot reason for usage by bootloaders like
+			 * U-boot, kernelflinger, etc...
+			 */
+			ret = oshob_info->scu_ipc_write_osnib(
+                                &rr,
+                                1,
+                                offsetof(struct scu_ipc_osnib, intel_reserved));
+			/* Check we stored correctly our reboot reason in intel_reserved */
+			oshob_info->scu_ipc_read_osnib(
+				&rr_check,
+				1,
+				offsetof(struct scu_ipc_osnib, intel_reserved));
+			if (rr == rr_check)
+				pr_debug("%s: rr=0x%x, rr_check=0x%x...SUCCESS we wrote to osnib for next reboot\n",
+					__func__, rr, rr_check);
+			else
+				pr_debug("%s: rr=0x%x, rr_check=0x%x...FAILED to write to osnib for next reboot\n",
+					__func__, rr, rr_check);
+
+			return ret;
 		}
 	}
 
@@ -1210,11 +1242,23 @@ EXPORT_SYMBOL_GPL(intel_scu_ipc_write_osnib_rr);
  */
 int intel_scu_ipc_read_osnib_rr(u8 *rr)
 {
-	pr_debug("intel_scu_ipc_read_osnib_rr: read reboot reason\n");
-	return oshob_info->scu_ipc_read_osnib(
+	int i, ret;
+
+	ret = oshob_info->scu_ipc_read_osnib(
 			rr,
 			1,
 			offsetof(struct scu_ipc_osnib, target_mode));
+
+	for (i = 0; i < ARRAY_SIZE(osnib_target_oses); i++) {
+		pr_debug("%s: intel_scu_ipc_read_osnib_rr: rr=0x%x, osnib_target_oses[%d].id=0x%x, "
+			"osnib_target_oses[%d].target_os_name=%s\n", __func__,
+			*rr, i, osnib_target_oses[i].id, i, osnib_target_oses[i].target_os_name);
+		if (osnib_target_oses[i].id == *rr)
+                        pr_debug("%s: reboot reason target: %s\n",
+                                __func__, osnib_target_oses[i].target_os_name);
+	}
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(intel_scu_ipc_read_osnib_rr);
 
