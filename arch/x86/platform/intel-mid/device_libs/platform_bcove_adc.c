@@ -19,6 +19,7 @@
 #include <asm/intel_basincove_gpadc.h>
 #include <linux/platform_data/intel_mid_remoteproc.h>
 
+#include "platform_ipc.h"
 #include "platform_bcove_adc.h"
 
 /* SRAM address where the GPADC interrupt register is cached */
@@ -104,33 +105,28 @@ static struct intel_basincove_gpadc_platform_data bcove_adc_pdata = {
 
 void __init *bcove_adc_platform_data(void *info)
 {
-	struct platform_device *pdev = NULL;
 	struct sfi_device_table_entry *entry = info;
-	int ret;
 
-	pdev = platform_device_alloc(BCOVE_ADC_DEV_NAME, -1);
-
-	if (!pdev) {
-		pr_err("out of memory for SFI platform dev %s\n",
-					BCOVE_ADC_DEV_NAME);
-		goto out;
-	}
-
+	bcove_adc_pdata.channel_num = GPADC_CH_NUM;
 	bcove_adc_pdata.intr = GPADC_SRAM_INTR_ADDR;
-
-	pdev->dev.platform_data = &bcove_adc_pdata;
-
-	ret = platform_device_add(pdev);
-	if (ret) {
-		pr_err("failed to add bcove adc platform device\n");
-		platform_device_put(pdev);
-		goto out;
-	}
-
-	install_irq_resource(pdev, entry->irq);
+	bcove_adc_pdata.intr_mask = MBATTEMP | MSYSTEMP | MBATT
+	| MVIBATT | MCCTICK;
+	bcove_adc_pdata.gpadc_iio_maps = basincove_iio_maps;
+	bcove_adc_pdata.gpadc_regmaps = basincove_gpadc_regmaps;
+	bcove_adc_pdata.gpadc_regs = &basincove_gpadc_regs;
+	bcove_adc_pdata.gpadc_channels = basincove_adc_channels;
 
 	register_rpmsg_service("rpmsg_bcove_adc", RPROC_SCU,
 				RP_BCOVE_ADC);
-out:
+
 	return &bcove_adc_pdata;
 }
+
+static const struct devs_id bcove_adc_dev_id __initconst = {
+        .name = "bcove_adc",
+        .type = SFI_DEV_TYPE_IPC,
+        .delay = 1,
+        .get_platform_data = &bcove_adc_platform_data,
+};
+
+sfi_device(bcove_adc_dev_id);

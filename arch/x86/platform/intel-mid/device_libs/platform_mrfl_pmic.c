@@ -25,24 +25,8 @@
 
 void __init *mrfl_pmic_ccsm_platform_data(void *info)
 {
-	struct sfi_device_table_entry *entry = info;
 	static struct pmic_platform_data pmic_pdata;
-	struct platform_device *pdev = NULL;
-	int ret;
 
-	pdev = platform_device_alloc(entry->name, -1);
-	if (!pdev) {
-		pr_err("Out of memory for SFI platform dev %s\n", entry->name);
-		goto out;
-	}
-	pdev->dev.platform_data = &pmic_pdata;
-	ret = platform_device_add(pdev);
-	if (ret) {
-		pr_err("Failed to add adc platform device\n");
-		platform_device_put(pdev);
-		goto out;
-	}
-	install_irq_resource(pdev, entry->irq);
 #ifdef CONFIG_BQ24261_CHARGER
 	pmic_pdata.cc_to_reg = bq24261_cc_to_reg;
 	pmic_pdata.cv_to_reg = bq24261_cv_to_reg;
@@ -58,7 +42,6 @@ static const struct devs_id pmic_ccsm_dev_id __initconst = {
 	.type = SFI_DEV_TYPE_IPC,
 	.delay = 1,
 	.get_platform_data = &mrfl_pmic_ccsm_platform_data,
-	.device_handler = &ipc_device_handler,
 };
 
 sfi_device(pmic_ccsm_dev_id);

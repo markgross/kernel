@@ -62,9 +62,9 @@ static irqreturn_t mid_pb_isr(int irq, void *dev_id)
 	input_sync(priv->input);
 
 	if (pbstat & priv->pb_level)
-		pr_info("[%s] power button released\n", priv->input->name);
+		pr_debug("[%s] power button released\n", priv->input->name);
 	else
-		pr_info("[%s] power button pressed\n", priv->input->name);
+		pr_debug("[%s] power button pressed\n", priv->input->name);
 	freeze_wake();
 
 	return IRQ_WAKE_THREAD;

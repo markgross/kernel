@@ -1201,6 +1201,10 @@ static const struct idle_cpu idle_cpu_hsw = {
 	.disable_promotion_to_c1e = true,
 };
 
+static const struct idle_cpu idle_cpu_mrfld = {
+	.state_table = mrfld_cstates,
+};
+
 static const struct idle_cpu idle_cpu_bdw = {
 	.state_table = bdw_cstates,
 	.disable_promotion_to_c1e = true,
@@ -1248,6 +1252,7 @@ static const struct x86_cpu_id intel_idle_ids[] __initconst = {
 	ICPU(0x56, idle_cpu_bdw),
 	ICPU(0x4e, idle_cpu_skl),
 	ICPU(0x5e, idle_cpu_skl),
+	ICPU(0x4a, idle_cpu_mrfld),     /* Tangier SoC */
 	{}
 };
 MODULE_DEVICE_TABLE(x86cpu, intel_idle_ids);

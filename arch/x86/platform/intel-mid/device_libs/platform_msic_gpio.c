@@ -16,25 +16,15 @@
 #include <linux/gpio.h>
 #include <linux/mfd/intel_msic.h>
 #include <asm/intel-mid.h>
-#include "platform_msic.h"
+#include <linux/platform_data/intel_mid_remoteproc.h>
+
+#include "platform_msic_gpio.h"
 #include "platform_ipc.h"
 
-static void __init *msic_gpio_platform_data(void *info)
+void __init *msic_gpio_platform_data(void *info)
 {
-	struct platform_device *pdev = NULL;
-	struct sfi_device_table_entry *entry = info;
 	static struct intel_msic_gpio_pdata msic_gpio_pdata;
-	int ret;
 	int gpio;
-	struct resource res;
-
-	pdev = platform_device_alloc(MSIC_GPIO_DEVICE_NAME, -1);
-
-	if (!pdev) {
-		pr_err("out of memory for SFI platform dev %s\n",
-					MSIC_GPIO_DEVICE_NAME);
-		return NULL;
-	}
 
 	gpio = get_gpio_by_name("msic_gpio_base");
 
@@ -58,20 +48,6 @@ static void __init *msic_gpio_platform_data(void *info)
 	msic_gpio_pdata.can_sleep = 1;
 	msic_gpio_pdata.gpio_base = gpio;
 
-	pdev->dev.platform_data = &msic_gpio_pdata;
-
-	ret = platform_device_add(pdev);
-	if (ret) {
-		pr_err("failed to add msic gpio platform device\n");
-		platform_device_put(pdev);
-		return NULL;
-	}
-
-	res.name = "IRQ",
-	res.flags = IORESOURCE_IRQ,
-	res.start = entry->irq;
-	platform_device_add_resources(pdev, &res, 1);
-
 	register_rpmsg_service("rpmsg_msic_gpio", RPROC_SCU, RP_MSIC_GPIO);
 
 	return &msic_gpio_pdata;
@@ -82,7 +58,6 @@ static const struct devs_id msic_gpio_dev_id __initconst = {
 	.type = SFI_DEV_TYPE_IPC,
 	.delay = 1,
 	.get_platform_data = &msic_gpio_platform_data,
-	.device_handler = &ipc_device_handler,
 };
 
 sfi_device(msic_gpio_dev_id);
