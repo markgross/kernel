@@ -84,7 +84,9 @@ static int tng_setup(struct mid8250 *mid, struct uart_port *p)
 		return -ENODEV;
 
 	mid->dma_index = index;
-	mid->dma_dev = pci_get_slot(pdev->bus, PCI_DEVFN(5, 0));
+	mid->dma_dev = pci_get_slot(pdev->bus,
+				PCI_DEVFN(PCI_SLOT(pdev->devfn),
+				PCI_FUNC(pdev->devfn)));
 	return 0;
 }
 
