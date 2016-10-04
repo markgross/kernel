@@ -162,10 +162,10 @@ int __init sfi_parse_mrtc(struct sfi_table_header *table)
 		memcpy(sfi_mrtc_array, pentry, totallen);
 	}
 
-	pr_info("SFI RTC info (num = %d):\n", sfi_mrtc_num);
+	pr_debug("SFI RTC info (num = %d):\n", sfi_mrtc_num);
 	pentry = sfi_mrtc_array;
 	for (totallen = 0; totallen < sfi_mrtc_num; totallen++, pentry++) {
-		pr_info("RTC[%d]: paddr = 0x%08x, irq = %d\n",
+		pr_debug("RTC[%d]: paddr = 0x%08x, irq = %d\n",
 			totallen, (u32)pentry->phys_addr, pentry->irq);
 		mp_irq.type = MP_INTSRC;
 		mp_irq.irqtype = mp_INT;
@@ -202,9 +202,9 @@ static int __init sfi_parse_gpio(struct sfi_table_header *table)
 		return -1;
 	gpio_num_entry = num;
 
-	pr_info("GPIO pin info:\n");
+	pr_debug("GPIO pin info:\n");
 	for (i = 0; i < num; i++, pentry++)
-		pr_info("info[%2d]: controller = %16.16s, pin_name = %16.16s,"
+		pr_debug("info[%2d]: controller = %16.16s, pin_name = %16.16s,"
 		" pin = %d\n", i,
 			pentry->controller_name,
 			pentry->pin_name,
@@ -283,8 +283,11 @@ void intel_scu_devices_create(void)
 {
 	int i;
 
-	for (i = 0; i < ipc_next_dev; i++)
+
+	for (i = 0; i < ipc_next_dev; i++) {
+		pr_debug("%s: Adding IPC Device: name=%s\n", __func__, ipc_devs[i]->name);
 		platform_device_add(ipc_devs[i]);
+	}
 
 	for (i = 0; i < spi_next_dev; i++)
 		spi_register_board_info(spi_devs[i], 1);
@@ -355,7 +358,7 @@ static void __init sfi_handle_ipc_dev(struct sfi_device_table_entry *pentry,
 	struct platform_device *pdev;
 	void *pdata = NULL;
 
-	pr_err("IPC bus, name = %16.16s, irq = 0x%2x\n",
+	pr_debug("IPC bus, name = %16.16s, irq = 0x%2x\n",
 		pentry->name, pentry->irq);
 	pdata = intel_mid_sfi_get_pdata(dev, pentry);
 	if (IS_ERR(pdata))
@@ -385,7 +388,7 @@ static void __init sfi_handle_spi_dev(struct sfi_device_table_entry *pentry,
 	spi_info.bus_num = pentry->host_num;
 	spi_info.chip_select = pentry->addr;
 	spi_info.max_speed_hz = pentry->max_freq;
-	pr_err("SPI bus=%d, name=%16.16s, irq=0x%2x, max_freq=%d, cs=%d\n",
+	pr_debug("SPI bus=%d, name=%16.16s, irq=0x%2x, max_freq=%d, cs=%d\n",
 		spi_info.bus_num,
 		spi_info.modalias,
 		spi_info.irq,
@@ -413,7 +416,7 @@ static void __init sfi_handle_i2c_dev(struct sfi_device_table_entry *pentry,
 	strncpy(i2c_info.type, pentry->name, SFI_NAME_LEN);
 	i2c_info.irq = ((pentry->irq == (u8)0xff) ? 0 : pentry->irq);
 	i2c_info.addr = pentry->addr;
-	pr_err("I2C bus = %d, name = %16.16s, irq = 0x%2x, addr = 0x%x\n",
+	pr_debug("I2C bus = %d, name = %16.16s, irq = 0x%2x, addr = 0x%x\n",
 		pentry->host_num,
 		i2c_info.type,
 		i2c_info.irq,
@@ -440,7 +443,7 @@ static void __init sfi_handle_sd_dev(struct sfi_device_table_entry *pentry,
        sd_info.bus_num = pentry->host_num;
        sd_info.board_ref_clock = pentry->max_freq;
        sd_info.addr = pentry->addr;
-       pr_err("SDIO bus = %d, name = %16.16s, "
+       pr_debug("SDIO bus = %d, name = %16.16s, "
                        "ref_clock = %d, addr =0x%x\n",
                        sd_info.bus_num,
                        sd_info.name,
@@ -477,7 +480,7 @@ static struct devs_id __init *get_device_id(u8 type, char *name)
 static int __init sfi_parse_devs(struct sfi_table_header *table)
 {
 	struct sfi_table_simple *sb;
-	struct sfi_device_table_entry *pentry;
+	struct sfi_device_table_entry *pentry, *dump_sfi_entries;
 	struct devs_id *dev = NULL;
 	int num, i, ret;
 	int polarity;
@@ -486,21 +489,22 @@ static int __init sfi_parse_devs(struct sfi_table_header *table)
 	sb = (struct sfi_table_simple *)table;
 	num = SFI_GET_NUM_ENTRIES(sb, struct sfi_device_table_entry);
 	pentry = (struct sfi_device_table_entry *)sb->pentry;
-	
-	pr_debug("%s: table->sig=%s, table->oem_id=%s, table->oem_table_id=%s, "
-		"pentry->type=%u, pentry->host_num=%u, pentry->addr=%u, "
-		"pentry->irq=%u, pentry->name=%s, number_of_sfi_entries=%d\n",
-		__func__, table->sig, table->oem_id, table->oem_table_id,
-			pentry->type, pentry->host_num, pentry->addr,
-			pentry->irq, pentry->name, num);
+	dump_sfi_entries = pentry;
+
+	/* Dump all SFI table device entries */
+	pr_debug("SFI Table Entries:\n");
+	for (i = 0; i < num; i++, dump_sfi_entries++) {
+		pr_debug("SFI Entry %d: name=%s, irq=%d\n",
+			i, dump_sfi_entries->name, dump_sfi_entries->irq);
+	}
 
 	for (i = 0; i < num; i++, pentry++) {
 		int irq = pentry->irq;
-		
+
 		pr_debug("%s: pentry->type=%u, pentry->host_num=%u, pentry->addr=%u, "
 			"pentry->irq=%u, pentry->max_freq=%u, pentry->name=%s\n",
 			__func__, pentry->type, pentry->host_num, pentry->addr,
-			pentry->irq, pentry->name); 
+			pentry->irq, pentry->max_freq, pentry->name);
 
 		if (irq != (u8)0xff) { /* native RTE case */
 			/* these SPI2 devices are not exposed to system as PCI
@@ -557,8 +561,8 @@ static int __init sfi_parse_devs(struct sfi_table_header *table)
 		}
 
 		if (dev->device_handler) {
-			pr_debug("%s: dev->name=%s, dev->device_handler != NULL, "
-				"calling handler function\n", __func__, dev->name);
+			pr_debug("%s: dev->name=%s, calling dev->device_handler=%ps\n",
+				__func__, dev->name, dev->device_handler);
 			dev->device_handler(pentry, dev);
 		} else {
 			switch (pentry->type) {
@@ -619,8 +623,8 @@ static int __init sfi_parse_oemb(struct sfi_table_header *table)
 	snprintf(oem_id, (SFI_OEM_ID_SIZE + 1), "%s", oemb->header.oem_id);
 	snprintf(oem_table_id, (SFI_OEM_TABLE_ID_SIZE + 1), "%s",
 		 oemb->header.oem_table_id);
-	pr_info("SFI OEMB Layout\n");
-	pr_info("\tOEMB signature               : %s\n"
+	pr_debug("SFI OEMB Layout\n");
+	pr_debug("\tOEMB signature               : %s\n"
 		"\tOEMB length                  : %d\n"
 		"\tOEMB revision                : %d\n"
 		"\tOEMB checksum                : 0x%X\n"
