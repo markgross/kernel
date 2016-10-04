@@ -272,7 +272,7 @@ int alloc_rpmsg_instance(struct rpmsg_channel *rpdev,
 	int ret = 0;
 	struct rpmsg_instance *instance;
 
-	dev_info(&rpdev->dev, "Allocating rpmsg_instance\n");
+	dev_dbg(&rpdev->dev, "Allocating rpmsg_instance\n");
 
 	instance = kzalloc(sizeof(*instance), GFP_KERNEL);
 	if (!instance) {
@@ -362,7 +362,7 @@ static int rpmsg_ipc_probe(struct rpmsg_channel *rpdev)
 		goto out;
 	}
 
-	dev_info(&rpdev->dev, "Probed rpmsg_ipc device %s\n", rpdev->id.name);
+	dev_dbg(&rpdev->dev, "Probed rpmsg_ipc device %s\n", rpdev->id.name);
 
 	for (i = RPMSG_IPC_COMMAND; i < RPMSG_IPC_COMMAND_TYPE_NUM; i++) {
 		if (!strncmp(rpdev->id.name, ddata[i].name, RPMSG_NAME_SIZE)) {
