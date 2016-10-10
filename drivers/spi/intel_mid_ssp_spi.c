@@ -82,8 +82,7 @@ static void dump_trailer(const struct device *dev, char *buf, int len, int sz)
 
 static inline u8 ssp_cfg_get_mode(u8 ssp_cfg)
 {
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER ||
-	    intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
 		return (ssp_cfg) & 0x03;
 	else
 		return (ssp_cfg) & 0x07;
@@ -91,8 +90,7 @@ static inline u8 ssp_cfg_get_mode(u8 ssp_cfg)
 
 static inline u8 ssp_cfg_get_spi_bus_nb(u8 ssp_cfg)
 {
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER ||
-	    intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
 		return ((ssp_cfg) >> 2) & 0x07;
 	else
 		return ((ssp_cfg) >> 3) & 0x07;
@@ -100,8 +98,7 @@ static inline u8 ssp_cfg_get_spi_bus_nb(u8 ssp_cfg)
 
 static inline u8 ssp_cfg_is_spi_slave(u8 ssp_cfg)
 {
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER ||
-	    intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER)
 		return (ssp_cfg) & 0x20;
 	else
 		return (ssp_cfg) & 0x40;
@@ -563,8 +560,7 @@ static void dma_transfer(struct ssp_drv_context *sspc)
 	}
 
 	sspc->dmas_rx.dma_slave.src_addr = ssdr_addr;
-	rxchan->device->device_control(rxchan, DMA_SLAVE_CONFIG,
-		(unsigned long)&(sspc->dmas_rx.dma_slave));
+	rxchan->device->device_config(rxchan, &(sspc->dmas_rx.dma_slave));
 	dma_sync_single_for_device(dev, sspc->rx_dma,
 		sspc->len, DMA_FROM_DEVICE);
 
@@ -586,8 +582,7 @@ static void dma_transfer(struct ssp_drv_context *sspc)
 
 	/* 3. prepare the TX dma transfer */
 	sspc->dmas_tx.dma_slave.dst_addr = ssdr_addr;
-	txchan->device->device_control(txchan, DMA_SLAVE_CONFIG,
-		(unsigned long)&(sspc->dmas_tx.dma_slave));
+	txchan->device->device_config(txchan, &(sspc->dmas_tx.dma_slave));
 	dma_sync_single_for_device(dev, sspc->tx_dma,
 		sspc->len, DMA_TO_DEVICE);
 
@@ -812,7 +807,6 @@ static void poll_writer(struct work_struct *work)
 {
 	struct ssp_drv_context *sspc =
 		container_of(work, struct ssp_drv_context, poll_write);
-	struct device *dev = &sspc->pdev->dev;
 	size_t pkg_len = sspc->len;
 	int ret;
 
@@ -980,7 +974,7 @@ static int handle_message(struct ssp_drv_context *sspc)
 
 	list_for_each_entry(transfer, &msg->transfers, transfer_list) {
 		wait_for_completion(&sspc->msg_done);
-		INIT_COMPLETION(sspc->msg_done);
+		reinit_completion(&sspc->msg_done);
 
 		/* Check transfer length */
 		if (unlikely((transfer->len > MAX_SPI_TRANSFER_SIZE) ||
@@ -1084,11 +1078,8 @@ static int handle_message(struct ssp_drv_context *sspc)
 		sspc->rx_end = sspc->rx + transfer->len;
 
 		/* [REVERT ME] Bug in status register clear for Tangier simulation */
-		if ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) ||
-				(intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)) {
-			if ((intel_mid_identify_sim() != INTEL_MID_CPU_SIMULATION_VP &&
-						(intel_mid_identify_sim() != INTEL_MID_CPU_SIMULATION_HVP)))
-				write_SSSR(sspc->clear_sr, reg);
+		if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) {
+			write_SSSR(sspc->clear_sr, reg);
 		} else /* Clear status  */
 			write_SSSR(sspc->clear_sr, reg);
 
@@ -1553,20 +1544,6 @@ static int intel_mid_ssp_spi_probe(struct pci_dev *pdev,
 	sspc->irq = pdev->irq;
 	status = request_irq(sspc->irq, ssp_int, IRQF_SHARED,
 		"intel_mid_ssp_spi", sspc);
-
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) {
-		if ((intel_mid_identify_sim() ==
-				INTEL_MID_CPU_SIMULATION_SLE) ||
-		    (intel_mid_identify_sim() ==
-				INTEL_MID_CPU_SIMULATION_NONE)) {
-			/* [REVERT ME] Tangier SLE not supported.
-			 * Requires debug before removal.  Assume
-			 * also required in Si. */
-			disable_irq_nosync(sspc->irq);
-		}
-		if (intel_mid_identify_sim() == INTEL_MID_CPU_SIMULATION_NONE)
-			ssp_timing_wr = 1;
-	}
 
 	if (status < 0) {
 		dev_err(&pdev->dev, "can not get IRQ\n");

@@ -465,7 +465,7 @@ static void midc_descriptor_complete(struct intel_mid_dma_chan *midc,
 	}
 	if (midc->raw_tfr) {
 		list_del(&desc->desc_node);
-		desc->status = DMA_SUCCESS;
+		desc->status = DMA_COMPLETE;
 		if (desc->lli != NULL && desc->lli->llp != 0)
 			dma_pool_free(desc->lli_pool, desc->lli,
 						desc->lli_phys);
@@ -741,7 +741,7 @@ static enum dma_status intel_mid_dma_tx_status(struct dma_chan *chan,
 	enum dma_status ret;
 
 	ret = dma_cookie_status(chan, cookie, txstate);
-	if (ret != DMA_SUCCESS) {
+	if (ret != DMA_COMPLETE) {
 		spin_lock_bh(&midc->lock);
 		midc_start_descriptors(to_middma_device(chan->device), midc);
 		spin_unlock_bh(&midc->lock);
@@ -752,11 +752,13 @@ static enum dma_status intel_mid_dma_tx_status(struct dma_chan *chan,
 	return ret;
 }
 
-static int dma_slave_control(struct dma_chan *chan, unsigned long arg)
+static int intel_mid_dma_slave_config(struct dma_chan *chan, struct dma_slave_config *cfg)
 {
 	struct intel_mid_dma_chan	*midc = to_intel_mid_dma_chan(chan);
-	struct dma_slave_config  *slave = (struct dma_slave_config *)arg;
+	struct dma_slave_config  *slave = cfg;
 	struct intel_mid_dma_slave *mid_slave;
+
+	pr_debug("%s: channel:%d\n", __func__, midc->ch_id);
 
 	BUG_ON(!midc);
 	BUG_ON(!slave);
@@ -770,27 +772,13 @@ static int dma_slave_control(struct dma_chan *chan, unsigned long arg)
 	return 0;
 }
 
-/**
- * intel_mid_dma_device_control -	DMA device control
- * @chan: chan for DMA control
- * @cmd: control cmd
- * @arg: cmd arg value
- *
- * Perform DMA control command
- */
-static int intel_mid_dma_device_control(struct dma_chan *chan,
-			enum dma_ctrl_cmd cmd, unsigned long arg)
+static int intel_mid_dma_terminate_all(struct dma_chan *chan, struct dma_slave_config *cfg)
 {
-	struct intel_mid_dma_chan	*midc = to_intel_mid_dma_chan(chan);
-	struct middma_device	*mid = to_middma_device(chan->device);
-	struct intel_mid_dma_desc	*desc, *_desc;
+        struct intel_mid_dma_chan       *midc = to_intel_mid_dma_chan(chan);
+        struct middma_device    *mid = to_middma_device(chan->device);
+        struct intel_mid_dma_desc       *desc, *_desc;
 
-	pr_debug("%s:CMD:%d for channel:%d\n", __func__, cmd, midc->ch_id);
-	if (cmd == DMA_SLAVE_CONFIG)
-		return dma_slave_control(chan, arg);
-
-	if (cmd != DMA_TERMINATE_ALL)
-		return -ENXIO;
+        pr_debug("%s: channel:%d\n", __func__, midc->ch_id);
 
 	spin_lock_bh(&midc->lock);
 	if (midc->busy == false) {
@@ -1674,7 +1662,8 @@ static struct intel_mid_dma_ops v1_dma_ops = {
 	.device_prep_dma_memcpy		= intel_mid_dma_prep_memcpy,
 	.device_prep_dma_sg		= intel_mid_dma_prep_sg,
 	.device_prep_slave_sg		= intel_mid_dma_prep_slave_sg,
-	.device_control			= intel_mid_dma_device_control,
+	.device_config			= intel_mid_dma_slave_config,
+	.device_terminate_all           = intel_mid_dma_terminate_all,
 	.device_tx_status		= intel_mid_dma_tx_status,
 	.device_issue_pending		= intel_mid_dma_issue_pending,
 	.dma_chan_suspend		= intel_mid_dma_chan_suspend_v1,
@@ -1687,7 +1676,8 @@ static struct intel_mid_dma_ops v2_dma_ops = {
 	.device_prep_dma_memcpy         = intel_mid_dma_prep_memcpy_v2,
 	.device_prep_dma_sg             = intel_mid_dma_prep_sg,
 	.device_prep_slave_sg           = intel_mid_dma_prep_slave_sg,
-	.device_control                 = intel_mid_dma_device_control,
+	.device_config			= intel_mid_dma_slave_config,
+	.device_terminate_all		= intel_mid_dma_terminate_all,
 	.device_tx_status               = intel_mid_dma_tx_status,
 	.device_issue_pending           = intel_mid_dma_issue_pending,
 	.dma_chan_suspend		= intel_mid_dma_chan_suspend_v2,
@@ -1781,7 +1771,7 @@ int mid_setup_dma(struct device *dev)
 	dma->common.device_prep_dma_sg = dma->dma_ops.device_prep_dma_sg;
 	dma->common.device_issue_pending = dma->dma_ops.device_issue_pending;
 	dma->common.device_prep_slave_sg = dma->dma_ops.device_prep_slave_sg;
-	dma->common.device_control = dma->dma_ops.device_control;
+	dma->common.device_config = dma->dma_ops.device_config;
 
 	/*enable dma cntrl*/
 	iowrite32(REG_BIT0, dma->dma_base + DMA_CFG);
@@ -1977,7 +1967,6 @@ static void intel_mid_dma_remove(struct pci_dev *pdev)
 */
 int dma_suspend(struct device *dev)
 {
-	int i;
 	struct middma_device *device = dev_get_drvdata(dev);
 	pr_debug("MDMA: dma_suspend called\n");
 #if 0
@@ -2098,6 +2087,13 @@ static struct pci_driver intel_mid_dma_pci_driver = {
 #endif
 };
 
+/* ACPI support not relevant to Intel Merrifield/Edison;
+ * This code will never be upstreamed as SPI is being handled
+ * in an alternate way/driver, but until ready we'll use ported
+ * code.
+ */
+
+/*
 static const struct acpi_device_id dma_acpi_ids[];
 
 struct intel_mid_dma_probe_info *mid_get_acpi_driver_data(const char *hid)
@@ -2125,6 +2121,7 @@ static struct platform_driver intel_dma_acpi_driver = {
 	.probe	= dma_acpi_probe,
 	.remove	= dma_acpi_remove,
 };
+*/
 
 static int __init intel_mid_dma_init(void)
 {
@@ -2135,10 +2132,11 @@ static int __init intel_mid_dma_init(void)
 	ret = pci_register_driver(&intel_mid_dma_pci_driver);
 	if (ret)
 		pr_err("PCI dev registration failed");
-
+/*
 	ret = platform_driver_register(&intel_dma_acpi_driver);
 	if (ret)
 		pr_err("Platform dev registration failed");
+*/
 	return ret;
 }
 module_init(intel_mid_dma_init);
@@ -2146,7 +2144,7 @@ module_init(intel_mid_dma_init);
 static void __exit intel_mid_dma_exit(void)
 {
 	pci_unregister_driver(&intel_mid_dma_pci_driver);
-	platform_driver_unregister(&intel_dma_acpi_driver);
+/*	platform_driver_unregister(&intel_dma_acpi_driver); */
 }
 module_exit(intel_mid_dma_exit);
 
