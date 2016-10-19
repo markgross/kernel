@@ -68,6 +68,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/version.h>
+#include <linux/completion.h>
 
 #include "otg.h"
 
@@ -75,6 +76,7 @@
 
 struct dwc3_otg_hw_ops *dwc3_otg_pdata;
 struct dwc_device_par *platform_par;
+struct completion dwc3_otg_shutdown;
 
 static struct mutex lock;
 static const char driver_name[] = "dwc3_otg";
@@ -307,6 +309,7 @@ static void stop_peripheral(struct dwc_otg2 *otg)
 		return;
 
 	otg->stop_device(gadget);
+	complete(&dwc3_otg_shutdown);
 
 	if (dwc3_otg_pdata->after_stop_peripheral)
 		ret = dwc3_otg_pdata->after_stop_peripheral(otg);
@@ -1336,6 +1339,8 @@ static int dwc_otg_probe(struct pci_dev *pdev,
 			goto err;
 	}
 
+	init_completion(&dwc3_otg_shutdown);
+
 	pm_runtime_set_autosuspend_delay(&pdev->dev, 100);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_allow(&pdev->dev);
@@ -1387,6 +1392,7 @@ static void dwc_otg_shutdown(struct pci_dev *pdev)
 
 	/* stop main thread, ignore notification events */
 	stop_main_thread(otg);
+	wait_for_completion_timeout(&dwc3_otg_shutdown, usecs_to_jiffies(500));
 
 	pci_disable_device(pdev);
 }

@@ -19,7 +19,6 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/wakelock.h>
 
 #include <linux/usb/dwc3-intel-mid.h>
 #include <linux/usb/phy.h>
@@ -31,11 +30,11 @@
 
 #include "debug.h"
 
-/* Yuck...WTH is with this including c files? We need to move calls used 
- * either into their parent header files or copy the logic used here 
- * since we now are using DWC3 core, gadget, ep0, debug, etc... 
+/* Yuck...WTH is with this including c files? We need to move calls used
+ * either into their parent header files or copy the logic used here
+ * since we now are using DWC3 core, gadget, ep0, debug, etc...
  * for configfs driver in 4.x kernels to have Android ADB access. We also
- * need to get rid of the hatchet job done to this directories makefile 
+ * need to get rid of the hatchet job done to this directories makefile
  * (partly mine to workaround the mentioned issues in this comment)
  */
 #include "core.c"
@@ -66,7 +65,6 @@ struct dwc3_dev_data {
 	struct dwc3		*dwc;
 	void __iomem		*flis_reg;
 	u32			grxthrcfg;
-	struct wake_lock	wake_lock;
 	struct mutex		mutex;
 };
 
@@ -359,8 +357,6 @@ int dwc3_stop_peripheral(struct usb_gadget *g)
 
 	cancel_delayed_work_sync(&dwc->link_work);
 
-	wake_unlock(&_dev_data->wake_lock);
-
 	return 0;
 }
 
@@ -620,8 +616,6 @@ err0:
 static int dwc3_device_intel_remove(struct platform_device *pdev)
 {
 	iounmap(_dev_data->flis_reg);
-
-	wake_lock_destroy(&_dev_data->wake_lock);
 
 	dwc3_remove(pdev);
 
