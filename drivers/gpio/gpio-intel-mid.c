@@ -17,7 +17,6 @@
  * Moorestown platform Langwell chip.
  * Medfield platform Penwell chip.
  * Clovertrail platform Cloverview chip.
- * Merrifield platform Tangier chip.
  */
 
 #include <linux/module.h>
@@ -93,10 +92,6 @@ enum GPIO_CONTROLLERS {
 /* intel_mid gpio driver data */
 struct intel_mid_gpio_ddata {
 	u16 ngpio;		/* number of gpio pins */
-	u32 gplr_offset;	/* offset of first GPLR register from base */
-	u32 flis_base;		/* base address of FLIS registers */
-	u32 flis_len;		/* length of FLIS registers */
-	u32 (*get_flis_offset)(int gpio);
 	u32 chip_irq_type;	/* chip interrupt type */
 };
 
@@ -580,15 +575,6 @@ static const struct intel_mid_gpio_ddata gpio_cloverview_core = {
 	.chip_irq_type = INTEL_MID_IRQ_TYPE_EDGE,
 };
 
-static const struct intel_mid_gpio_ddata gpio_tangier = {
-	.ngpio = 192,
-	.gplr_offset = 4,
-	.flis_base = 0xff0c0000,
-	.flis_len = 0x8000,
-	.get_flis_offset = NULL,
-	.chip_irq_type = INTEL_MID_IRQ_TYPE_EDGE,
-};
-
 static const struct pci_device_id intel_gpio_ids[] = {
 	{
 		/* Lincroft */
@@ -614,11 +600,6 @@ static const struct pci_device_id intel_gpio_ids[] = {
 		/* Cloverview Core */
 		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x08f7),
 		.driver_data = (kernel_ulong_t)&gpio_cloverview_core,
-	},
-	{
-		/* Tangier */
-		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x1199),
-		.driver_data = (kernel_ulong_t)&gpio_tangier,
 	},
 	{ 0 }
 };
@@ -1163,8 +1144,6 @@ static int intel_gpio_probe(struct pci_dev *pdev,
 
 	priv->type = id->driver_data;
 	priv->reg_base = pcim_iomap_table(pdev)[0];
-	priv->reg_gplr = priv->reg_base + ddata->gplr_offset;
-	priv->get_flis_offset = ddata->get_flis_offset;
 	priv->chip_irq_type = ddata->chip_irq_type;
 	priv->chip.label = dev_name(&pdev->dev);
 	priv->chip.dev = &pdev->dev;
