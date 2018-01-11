@@ -58,6 +58,7 @@
 #include <asm/alternative-asm.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
+#include <asm/nospec-branch.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -308,7 +309,8 @@ ENTRY(ret_from_kernel_thread)
 	pushl_cfi $0x0202		# Reset kernel eflags
 	popfl_cfi
 	movl PT_EBP(%esp),%eax
-	call *PT_EBX(%esp)
+	movl	PT_EBX(%esp), %edx
+	CALL_NOSPEC %edx
 	movl $0,PT_EAX(%esp)
 	jmp syscall_exit
 	CFI_ENDPROC
@@ -1238,7 +1240,7 @@ error_code:
 	movl %ecx, %es
 	TRACE_IRQS_OFF
 	movl %esp,%eax			# pt_regs pointer
-	call *%edi
+	CALL_NOSPEC %edi
 	jmp ret_from_exception
 	CFI_ENDPROC
 END(page_fault)
