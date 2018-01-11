@@ -768,6 +768,9 @@ static void __init early_identify_cpu(struct cpuinfo_x86 *c)
 
 	if (this_cpu->c_bsp_init)
 		this_cpu->c_bsp_init(c);
+#ifdef CONFIG_RETPOLINE
+	setup_force_cpu_cap(X86_FEATURE_RETPOLINE);
+#endif
 
 	setup_force_cpu_cap(X86_FEATURE_ALWAYS);
 }
