@@ -629,6 +629,7 @@ END(irq_entries_start)
 	ALLOC_PT_GPREGS_ON_STACK
 	SAVE_C_REGS
 	SAVE_EXTRA_REGS
+	CLEAR_REGS_NOSPEC
 
 	movq %rsp, %rdi	/* arg1 for \func (pointer to pt_regs) */
 
@@ -1177,6 +1178,7 @@ ENTRY(xen_failsafe_callback)
 	ALLOC_PT_GPREGS_ON_STACK
 	SAVE_C_REGS
 	SAVE_EXTRA_REGS
+	CLEAR_REGS_NOSPEC
 	jmp error_exit
 	CFI_ENDPROC
 END(xen_failsafe_callback)
@@ -1218,6 +1220,7 @@ ENTRY(paranoid_entry)
 	cld
 	SAVE_C_REGS 8
 	SAVE_EXTRA_REGS 8
+	CLEAR_REGS_NOSPEC
 	movl $1,%ebx
 	movl $MSR_GS_BASE,%ecx
 	rdmsr
@@ -1268,7 +1271,7 @@ ENTRY(error_entry)
 	cld
 	SAVE_C_REGS 8
 	SAVE_EXTRA_REGS 8
-	xorl %ebx,%ebx
+	CLEAR_REGS_NOSPEC
 	testl $3,CS+8(%rsp)
 	je error_kernelspace
 error_swapgs:
@@ -1426,6 +1429,7 @@ ENTRY(nmi)
 	pushq	%r13		/* pt_regs->r13 */
 	pushq	%r14		/* pt_regs->r14 */
 	pushq	%r15		/* pt_regs->r15 */
+	CLEAR_REGS_NOSPEC
 
 	/*
 	 * At this point we no longer need to worry about stack damage
