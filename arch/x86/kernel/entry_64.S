@@ -243,13 +243,24 @@ GLOBAL(system_call_after_swapgs)
 	pushq_cfi_reg	r8			/* pt_regs->r8 */
 	pushq_cfi_reg	r9			/* pt_regs->r9 */
 	pushq_cfi_reg	r10			/* pt_regs->r10 */
+	/*
+	 * Clear extra registers that a speculation attack might
+	 * otherwise want to exploit.
+	 */
 	pushq_cfi_reg	r11			/* pt_regs->r11 */
+	xorq %r11, %r11
 	pushq_cfi_reg	rbx			/* pt_regs->rbx */
+	xorl %ebx, %ebx
 	pushq_cfi_reg   rbp			/* pt_regs->rbp */
+	xorl %ebp, %ebp
 	pushq_cfi_reg	r12			/* pt_regs->r12 */
+	xorq %r12, %r12
 	pushq_cfi_reg	r13			/* pt_regs->r13 */
+	xorq %r13, %r13
 	pushq_cfi_reg	r14			/* pt_regs->r14 */
+	xorq %r14, %r14
 	pushq_cfi_reg	r15			/* pt_regs->r15 */
+	xorq %r15, %r15
 
 	movq %rsp, %rdi
 	movl $AUDIT_ARCH_X86_64, %esi
@@ -277,6 +288,7 @@ GLOBAL(system_call_after_swapgs)
 	sbb %r11, %r11  /* sanitize syscall nr wrt speculation */
 	and %r11, %rax
 	movq %r10,%rcx	/* fixup for C */
+	xorq %r10, %r10
 #ifdef CONFIG_RETPOLINE
 	movq	sys_call_table(, %rax, 8), %rax
 	call	__x86_indirect_thunk_rax
