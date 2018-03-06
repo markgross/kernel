@@ -247,89 +247,10 @@ GLOBAL(system_call_after_swapgs)
 	sub	$(6*8),%rsp /* pt_regs->bp,bx,r12-15 not saved */
 	CFI_ADJUST_CFA_OFFSET 6*8
 
-	testl $_TIF_WORK_SYSCALL_ENTRY, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
-	jnz tracesys
-system_call_fastpath:
-#if __SYSCALL_MASK == ~0
-	cmpq $(NR_syscalls), %rax
-#else
-	andl $__SYSCALL_MASK,%eax
-	cmpl $(NR_syscalls), %eax
-#endif
-	jae	1f	/* return -ENOSYS (already in pt_regs->ax) */
-	sbb %r11, %r11  /* sanitize syscall nr wrt speculation */
-	and %r11, %rax
-	movq %r10,%rcx
-#ifdef CONFIG_RETPOLINE
-	movq	sys_call_table(, %rax, 8), %rax
-	call	__x86_indirect_thunk_rax
-#else
-	call	*sys_call_table(, %rax, 8)
-#endif
-
-	movq %rax,RAX(%rsp)
-1:
-/*
- * Syscall return path ending with SYSRET (fast path).
- * Has incompletely filled pt_regs.
- */
-	LOCKDEP_SYS_EXIT
-	/*
-	 * We do not frame this tiny irq-off block with TRACE_IRQS_OFF/ON,
-	 * it is too small to ever cause noticeable irq latency.
-	 */
-	DISABLE_INTERRUPTS(CLBR_NONE)
-
-	/*
-	 * We must check ti flags with interrupts (or at least preemption)
-	 * off because we must *never* return to userspace without
-	 * processing exit work that is enqueued if we're preempted here.
-	 * In particular, returning to userspace with any of the one-shot
-	 * flags (TIF_NOTIFY_RESUME, TIF_USER_RETURN_NOTIFY, etc) set is
-	 * very bad.
-	 */
-	testl $_TIF_ALLWORK_MASK, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
-	jnz int_ret_from_sys_call_irqs_off	/* Go to the slow path */
-
-	CFI_REMEMBER_STATE
-
-	RESTORE_C_REGS_EXCEPT_RCX_R11
-	movq	RIP(%rsp),%rcx
-	CFI_REGISTER	rip,rcx
-	movq	EFLAGS(%rsp),%r11
-	/*CFI_REGISTER	rflags,r11*/
-	movq	RSP(%rsp),%rsp
-	/*
-	 * 64bit SYSRET restores rip from rcx,
-	 * rflags from r11 (but RF and VM bits are forced to 0),
-	 * cs and ss are loaded from MSRs.
-	 * Restoration of rflags re-enables interrupts.
-	 *
-	 * NB: On AMD CPUs with the X86_BUG_SYSRET_SS_ATTRS bug, the ss
-	 * descriptor is not reinitialized.  This means that we should
-	 * avoid SYSRET with SS == NULL, which could happen if we schedule,
-	 * exit the kernel, and re-enter using an interrupt vector.  (All
-	 * interrupt entries on x86_64 set SS to NULL.)  We prevent that
-	 * from happening by reloading SS in __switch_to.  (Actually
-	 * detecting the failure in 64-bit userspace is tricky but can be
-	 * done.)
-	 */
-	USERGS_SYSRET64
-
-	CFI_RESTORE_STATE
-
-	/* Do syscall entry tracing */
-tracesys:
 	movq %rsp, %rdi
 	movl $AUDIT_ARCH_X86_64, %esi
 	call syscall_trace_enter_phase1
-	test %rax, %rax
-	jnz tracesys_phase2		/* if needed, run the slow path */
-	RESTORE_C_REGS_EXCEPT_RAX	/* else restore clobbered regs */
-	movq ORIG_RAX(%rsp), %rax
-	jmp system_call_fastpath	/*      and return to the fast path */
 
-tracesys_phase2:
 	SAVE_EXTRA_REGS
 	movq %rsp, %rdi
 	movl $AUDIT_ARCH_X86_64, %esi
