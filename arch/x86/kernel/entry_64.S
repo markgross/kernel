@@ -244,14 +244,17 @@ GLOBAL(system_call_after_swapgs)
 	pushq_cfi_reg	r9			/* pt_regs->r9 */
 	pushq_cfi_reg	r10			/* pt_regs->r10 */
 	pushq_cfi_reg	r11			/* pt_regs->r11 */
-	sub	$(6*8),%rsp /* pt_regs->bp,bx,r12-15 not saved */
-	CFI_ADJUST_CFA_OFFSET 6*8
+	pushq_cfi_reg	rbx			/* pt_regs->rbx */
+	pushq_cfi_reg   rbp			/* pt_regs->rbp */
+	pushq_cfi_reg	r12			/* pt_regs->r12 */
+	pushq_cfi_reg	r13			/* pt_regs->r13 */
+	pushq_cfi_reg	r14			/* pt_regs->r14 */
+	pushq_cfi_reg	r15			/* pt_regs->r15 */
 
 	movq %rsp, %rdi
 	movl $AUDIT_ARCH_X86_64, %esi
 	call syscall_trace_enter_phase1
 
-	SAVE_EXTRA_REGS
 	movq %rsp, %rdi
 	movl $AUDIT_ARCH_X86_64, %esi
 	movq %rax,%rdx
