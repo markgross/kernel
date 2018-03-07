@@ -138,9 +138,6 @@ For 32-bit we have the following conventions - kernel is built with
 	movq_cfi rbp, 4*8+\offset
 	movq_cfi rbx, 5*8+\offset
 	.endm
-	.macro SAVE_EXTRA_REGS_RBP offset=0
-	movq_cfi rbp, 4*8+\offset
-	.endm
 
 	.macro RESTORE_EXTRA_REGS offset=0
 	movq_cfi_restore 0*8+\offset, r15
